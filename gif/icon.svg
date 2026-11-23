@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="움짤 메이커">
+  <!-- 이 도구의 브라우저 탭 아이콘(index.html 안에 들어 있는 것)과 같은 그림. 도구 목록 페이지에서 쓴다. -->
+  <rect width="32" height="32" rx="7" fill="#1769e0"/>
+  <path d="M12 9.5v13l11-6.5z" fill="#fff"/>
+</svg>
