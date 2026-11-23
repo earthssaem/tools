@@ -210,8 +210,8 @@ dialog::backdrop { background: rgba(20, 25, 38, .5); }
   <button id="btn-undo" title="실행 취소 (Ctrl+Z)" disabled>↶ 실행 취소</button>
   <button id="btn-redo" title="다시 실행 (Ctrl+Shift+Z)" disabled>↷ 다시 실행</button>
   <span class="sep"></span>
-  <button id="btn-save-all" disabled>전체 저장</button>
-  <button id="btn-save-sel" disabled>선택한 페이지만 저장</button>
+  <button id="btn-save-all" class="primary" disabled title="지금 순서대로 모든 쪽을 PDF 하나로 합쳐서 내려받습니다">병합해서 다운받기</button>
+  <button id="btn-save-sel" disabled title="선택한 쪽만 PDF 하나로 내려받습니다">선택한 쪽만 다운받기</button>
   <div class="local-note" title="모든 처리는 이 브라우저 안에서만 이루어집니다. 서버로 보내거나 저장하지 않습니다.">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.2 7V5a2.8 2.8 0 0 1 5.6 0v2"/></svg>
     파일은 이 컴퓨터 밖으로 나가지 않습니다
@@ -234,7 +234,7 @@ dialog::backdrop { background: rgba(20, 25, 38, .5); }
           <ol class="steps">
             <li>① PDF를 넣고 <b>편집</b> 탭에서 합치기·삭제·순서 정리</li>
             <li>② <b>개인정보</b> 탭에서 이름을 입력하고 탐지 → 확인 → 적용</li>
-            <li>③ PDF로 저장하거나 <b>Markdown</b> 탭에서 복사</li>
+            <li>③ <b>병합해서 다운받기</b>로 PDF 하나로 받거나 <b>Markdown</b> 탭에서 복사</li>
             <li>④ AI의 답을 <b>되돌리기</b> 탭에 붙여 넣어 실제 이름으로 복원</li>
           </ol>
         </div>
@@ -286,6 +286,7 @@ dialog::backdrop { background: rgba(20, 25, 38, .5); }
         <table class="keys">
           <tr><td>순서 바꾸기</td><td>썸네일을 끌어서 옮기기 (다른 파일 사이로도 가능)</td></tr>
           <tr><td>파일 순서</td><td>‘이름순 정렬’ 또는 파일 이름 옆 ▲▼</td></tr>
+          <tr><td>병합</td><td>위쪽 ‘병합해서 다운받기’ — 지금 보이는 순서대로 PDF 하나로 합칩니다</td></tr>
           <tr><td>여러 장 선택</td><td><span class="kbd">Shift</span>+클릭 범위, <span class="kbd">Ctrl</span>+클릭 하나씩</td></tr>
           <tr><td>삭제</td><td><span class="kbd">Delete</span> 또는 썸네일의 ✕</td></tr>
           <tr><td>회전</td><td>썸네일의 ↻ (90°씩)</td></tr>
@@ -384,7 +385,7 @@ dialog::backdrop { background: rgba(20, 25, 38, .5); }
     <h2 id="dlg-save-title">PDF 저장</h2>
     <div id="dlg-save-warn" class="note warn" hidden></div>
     <div class="fn"><input type="text" id="save-name" autocomplete="off" spellcheck="false"><span id="save-ext">.pdf</span></div>
-    <div class="btns"><button type="button" id="save-cancel">취소</button><button type="submit" class="primary" id="save-ok">저장</button></div>
+    <div class="btns"><button type="button" id="save-cancel">취소</button><button type="submit" class="primary" id="save-ok">다운받기</button></div>
   </form>
 </dialog>
 
@@ -1956,13 +1957,15 @@ async function savePdf(onlySel) {
   if (!pages.length) return;
   const block = exportBlock();
   if (block) return toast(block, true);
-  const name = await askName(onlySel ? `선택한 ${pages.length}쪽만 저장` : `전체 ${pages.length}쪽 저장`, defaultBase() + (onlySel ? "_선택" : "_편집"), ".pdf", exportWarning());
+  const nf = new Set(pages.map(p => p.f)).size;
+  const title = onlySel ? `선택한 ${pages.length}쪽만 다운받기` : (nf > 1 ? `PDF ${nf}개를 하나로 병합해 다운받기 (전체 ${pages.length}쪽)` : `전체 ${pages.length}쪽 다운받기`);
+  const name = await askName(title, defaultBase() + (onlySel ? "_선택" : "_편집"), ".pdf", exportWarning());
   if (!name) return;
   const b = busy("PDF를 만드는 중…");
   try {
     const bytes = await buildPdf(pages);
     download(bytes, name + ".pdf", "application/pdf");
-    toast(`저장했습니다: ${name}.pdf`);
+    toast(`다운받았습니다: ${name}.pdf (다운로드 폴더)`);
   } catch (e) { console.error(e); toast("저장하지 못했습니다: " + (e.message || e), true); }
   b.done();
 }
