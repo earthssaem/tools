@@ -4,11 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>연경쌤의 업무 공구함</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 <!-- 임시 목록 페이지. 허브 디자인은 따로 정한 뒤 바꾼다. -->
 <style>
   body { margin: 0; font-family: "Pretendard", "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", system-ui, sans-serif; color: #1d2433; background: #fff; line-height: 1.6; }
   main { max-width: 640px; margin: 0 auto; padding: 48px 20px 24px; }
-  h1 { font-size: 24px; margin: 0 0 24px; }
+  h1 { font-size: 24px; margin: 0 0 24px; display: flex; align-items: center; gap: 12px; }
+  h1 img { width: 40px; height: 40px; flex: none; }
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
   a.card { display: block; border: 1px solid #dfe2e8; border-radius: 8px; padding: 14px 16px; color: inherit; text-decoration: none; }
   a.card:hover, a.card:focus-visible { border-color: #2456c9; }
@@ -19,7 +21,7 @@
 </head>
 <body>
 <main>
-  <h1>연경쌤의 업무 공구함</h1>
+  <h1><img src="icon.svg" alt="">연경쌤의 업무 공구함</h1>
   <ul>
     <li><a class="card" href="pdf/">
       <div class="name">PDF 업무 도구</div>
