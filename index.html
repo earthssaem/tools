@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>연경쌤의 업무 공구함</title>
+<title>연경쌤의 업무 도구함</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <!-- 임시 목록 페이지. 허브 디자인은 따로 정한 뒤 바꾼다. -->
 <style>
@@ -12,7 +12,8 @@
   h1 { font-size: 24px; margin: 0 0 24px; display: flex; align-items: center; gap: 12px; }
   h1 img { width: 40px; height: 40px; flex: none; }
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
-  a.card { display: block; border: 1px solid #dfe2e8; border-radius: 8px; padding: 14px 16px; color: inherit; text-decoration: none; }
+  a.card { display: flex; align-items: center; gap: 14px; border: 1px solid #dfe2e8; border-radius: 8px; padding: 14px 16px; color: inherit; text-decoration: none; }
+  a.card img { width: 40px; height: 40px; flex: none; }
   a.card:hover, a.card:focus-visible { border-color: #2456c9; }
   .name { font-weight: 700; }
   .desc { color: #5a6375; font-size: 14px; }
@@ -21,11 +22,14 @@
 </head>
 <body>
 <main>
-  <h1><img src="icon.svg" alt="">연경쌤의 업무 공구함</h1>
+  <h1><img src="icon.svg" alt="">연경쌤의 업무 도구함</h1>
   <ul>
     <li><a class="card" href="pdf/">
-      <div class="name">PDF 업무 도구</div>
-      <div class="desc">PDF 합치기·페이지 삭제·순서 정리, 개인정보 가명 처리, Markdown 변환</div>
+      <img src="pdf/icon.svg" alt="">
+      <div>
+        <div class="name">PDF 업무 도구</div>
+        <div class="desc">PDF 합치기·페이지 삭제·순서 정리, 개인정보 가명 처리, Markdown 변환</div>
+      </div>
     </a></li>
   </ul>
 </main>

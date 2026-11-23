@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="PDF 업무 도구">
+  <!-- 이 도구의 브라우저 탭 아이콘(index.html 안에 들어 있는 것)과 같은 그림. 도구 목록 페이지에서 쓴다. -->
+  <rect width="32" height="32" rx="7" fill="#2456c9"/>
+  <path d="M10 7h8l5 5v13H10z" fill="#fff"/>
+  <path d="M18 7v5h5" fill="none" stroke="#2456c9" stroke-width="1.5"/>
+  <rect x="12.5" y="16" width="8" height="2.6" fill="#ffd500"/>
+  <rect x="12.5" y="20.5" width="5.5" height="1.6" fill="#b9c0cd"/>
+</svg>
