@@ -1,0 +1,2591 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- 이 페이지는 자기 자신(같은 주소)에서 받은 파일만 불러올 수 있다. 바깥으로 나가는 요청은 브라우저가 막는다. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' data: blob:; connect-src 'self' blob: data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>PDF 업무 도구</title>
+<!-- 아이콘도 파일 안에 넣어 따로 요청하지 않는다 -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232456c9'/%3E%3Cpath d='M10 7h8l5 5v13H10z' fill='%23fff'/%3E%3Cpath d='M18 7v5h5' fill='none' stroke='%232456c9' stroke-width='1.5'/%3E%3Crect x='12.5' y='16' width='8' height='2.6' fill='%23ffd500'/%3E%3Crect x='12.5' y='20.5' width='5.5' height='1.6' fill='%23b9c0cd'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f3f4f6; --panel: #ffffff; --line: #dfe2e8; --line2: #eceef2;
+  --ink: #1d2433; --ink2: #5a6375; --ink3: #8a92a3;
+  --accent: #2456c9; --accent-bg: #e9effc; --accent-ink: #173a8c;
+  --danger: #b93a2e; --danger-bg: #fdecea; --ok: #1c7c54; --ok-bg: #e6f5ee; --warn: #8a5a00; --warn-bg: #fff4d6;
+  --hl: rgba(255, 213, 0, .5);
+  --radius: 8px;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: "Pretendard", "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  font-size: 14px; color: var(--ink); background: var(--bg);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+button, input, textarea, select { font: inherit; color: inherit; }
+button {
+  border: 1px solid var(--line); background: #fff; border-radius: 6px; padding: 6px 12px; cursor: pointer;
+  white-space: nowrap; line-height: 1.3;
+}
+button:hover:not(:disabled) { background: #f6f7f9; border-color: #c9ced8; }
+button:disabled { opacity: .45; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+button.primary:hover:not(:disabled) { background: #1d49ad; border-color: #1d49ad; }
+button.ghost { border-color: transparent; background: transparent; }
+button.small { padding: 3px 8px; font-size: 12.5px; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+textarea, input[type=text] {
+  border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; background: #fff; width: 100%;
+}
+textarea { resize: vertical; line-height: 1.5; }
+label.chk { display: flex; align-items: flex-start; gap: 7px; cursor: pointer; padding: 2px 0; }
+label.chk input { margin-top: 3px; flex: none; }
+.hint { color: var(--ink2); font-size: 12.5px; line-height: 1.5; }
+.sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
+
+/* ── 상단 도구 막대 ── */
+header {
+  flex: none; height: 54px; display: flex; align-items: center; gap: 8px; padding: 0 14px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+header h1 { font-size: 16px; margin: 0 10px 0 2px; font-weight: 700; letter-spacing: -.2px; white-space: nowrap; }
+.local-note {
+  margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--ok); background: var(--ok-bg);
+  border-radius: 999px; padding: 4px 11px; font-size: 12.5px; font-weight: 600; white-space: nowrap;
+}
+.local-note svg { flex: none; }
+
+/* ── 본문 ── */
+main { flex: 1; min-height: 0; display: flex; }
+#stage { flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; }
+#scroller { flex: 1; overflow: auto; padding: 18px; position: relative; }
+#grid { position: relative; display: flex; flex-wrap: wrap; gap: 14px 12px; align-content: flex-start; user-select: none; min-height: 100%; }
+#statusbar { flex: none; height: 28px; display: flex; align-items: center; gap: 14px; padding: 0 14px; border-top: 1px solid var(--line); background: var(--panel); color: var(--ink2); font-size: 12.5px; }
+#statusbar .grow { flex: 1; }
+#statusbar a { color: var(--ink3); }
+
+/* 빈 화면 */
+#empty { position: absolute; inset: 18px; display: flex; align-items: center; justify-content: center; }
+#empty .drop {
+  width: min(640px, 100%); border: 2px dashed #b9c0cd; border-radius: 14px; background: #fff; padding: 46px 30px; text-align: center;
+}
+#empty h2 { margin: 14px 0 6px; font-size: 19px; }
+#empty p { margin: 0 0 18px; color: var(--ink2); }
+#empty .safe { display: inline-flex; align-items: center; gap: 8px; margin-top: 22px; padding: 10px 16px; border-radius: 10px; background: var(--ok-bg); color: var(--ok); font-weight: 700; font-size: 15px; }
+#empty .steps { margin: 20px auto 0; padding: 0; list-style: none; color: var(--ink2); font-size: 13px; line-height: 1.9; text-align: left; display: inline-block; }
+#dropveil { position: absolute; inset: 0; background: rgba(36, 86, 201, .1); border: 3px dashed var(--accent); display: none; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; color: var(--accent-ink); pointer-events: none; z-index: 20; }
+#stage.dragfile #dropveil { display: flex; }
+
+/* 썸네일 */
+.thumb { position: relative; width: 168px; padding: 8px 8px 6px; border-radius: 10px; border: 1px solid transparent; cursor: grab; }
+.thumb:hover { background: #e9ecf1; }
+.thumb.sel { background: var(--accent-bg); border-color: var(--accent); }
+.thumb.dragging { opacity: .35; }
+.thumb.flash .tbox { animation: flash 1.1s ease-out; }
+@keyframes flash { 0% { box-shadow: 0 0 0 5px rgba(255, 170, 0, .9); } 100% { box-shadow: 0 0 0 0 rgba(255, 170, 0, 0); } }
+.tbox { position: relative; width: 150px; height: 190px; margin: 0 auto; border-radius: 4px; }
+.tpage { position: absolute; left: 50%; top: 50%; background: #fff; border: 3px solid var(--fc, #999); box-shadow: 0 1px 3px rgba(0, 0, 0, .18); transition: transform .15s; box-sizing: content-box; }
+.tpage canvas { display: block; width: 100%; height: 100%; }
+.marks { position: absolute; inset: 0; pointer-events: none; }
+.mk { position: absolute; background: var(--hl); outline: 1px solid rgba(214, 160, 0, .9); }
+.mk.off { background: transparent; outline: 1px dashed rgba(150, 120, 0, .8); }
+.mk.man { background: rgba(255, 140, 0, .35); outline: 1px solid rgba(220, 110, 0, .95); }
+.mk.fail { background: rgba(220, 40, 30, .35); outline: 2px solid rgba(200, 30, 20, .95); }
+.tnum { position: absolute; left: 12px; top: 12px; min-width: 22px; height: 20px; padding: 0 5px; border-radius: 10px; background: rgba(29, 36, 51, .82); color: #fff; font-size: 11.5px; line-height: 20px; text-align: center; font-variant-numeric: tabular-nums; z-index: 2; }
+.tbtns { position: absolute; right: 10px; top: 10px; display: flex; gap: 4px; opacity: 0; z-index: 2; }
+.thumb:hover .tbtns, .thumb:focus-within .tbtns { opacity: 1; }
+.tbtns button { width: 26px; height: 26px; padding: 0; border-radius: 13px; font-size: 14px; line-height: 1; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); border-color: #c9ced8; }
+.tbtns button.del:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+.tcap { margin-top: 7px; font-size: 12px; color: var(--ink2); display: flex; align-items: center; gap: 5px; }
+.tcap .chip, .fchip { flex: none; width: 9px; height: 9px; border-radius: 2px; background: var(--fc, #999); }
+.tcap .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.tcap .pg { flex: none; font-variant-numeric: tabular-nums; color: var(--ink); }
+#insbar { position: absolute; width: 4px; border-radius: 2px; background: var(--accent); display: none; pointer-events: none; z-index: 5; }
+
+/* ── 오른쪽 패널 ── */
+#panel { flex: none; width: 410px; background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.tabs { flex: none; display: flex; border-bottom: 1px solid var(--line); padding: 0 8px; }
+.tab { flex: 1; border: 0; border-radius: 0; background: none; padding: 13px 4px 11px; border-bottom: 3px solid transparent; color: var(--ink2); font-weight: 600; }
+.tab:hover:not(:disabled) { background: none; color: var(--ink); }
+.tab[aria-selected=true] { color: var(--accent); border-bottom-color: var(--accent); }
+.pane { flex: 1; min-height: 0; overflow: auto; padding: 16px; display: none; flex-direction: column; gap: 14px; }
+.pane.on { display: flex; }
+.pane h3 { margin: 0 0 6px; font-size: 13.5px; }
+.sec { display: flex; flex-direction: column; gap: 6px; }
+.row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.note { border-radius: var(--radius); padding: 9px 11px; font-size: 13px; line-height: 1.55; }
+.note.warn { background: var(--warn-bg); color: var(--warn); }
+.note.ok { background: var(--ok-bg); color: var(--ok); }
+.note.bad { background: var(--danger-bg); color: var(--danger); }
+.note.info { background: #eef1f6; color: var(--ink2); }
+.note b { font-weight: 700; }
+.kbd { display: inline-block; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font-size: 11.5px; background: #fafbfc; color: var(--ink); }
+table.keys { border-collapse: collapse; font-size: 12.5px; color: var(--ink2); }
+table.keys td { padding: 3px 10px 3px 0; vertical-align: top; }
+.files { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.files li { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+.files .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files .ct { color: var(--ink2); font-variant-numeric: tabular-nums; }
+
+/* 대응표 */
+.maptbl { width: 100%; border-collapse: collapse; }
+.maptbl td { padding: 3px 0; }
+.maptbl td.nm { width: 45%; padding-right: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 0; }
+.maptbl td.ar { width: 24px; color: var(--ink3); text-align: center; }
+.maptbl input { padding: 4px 7px; }
+#sid-fmt { width: 110px; padding: 3px 7px; }
+
+/* 탐지 결과 */
+#hits { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--radius); max-height: 340px; overflow: auto; }
+#hits:empty { display: none; }
+.hgroup { position: sticky; top: 0; background: #f6f7f9; border-bottom: 1px solid var(--line2); padding: 4px 10px; font-size: 12px; color: var(--ink2); font-weight: 600; z-index: 1; }
+.hit { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--line2); font-size: 13px; }
+.hit:last-child { border-bottom: 0; }
+.hit input[type=checkbox] { flex: none; }
+.hit .ctx { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; color: var(--ink2); }
+.hit .ctx mark { background: var(--hl); color: var(--ink); padding: 0 1px; border-radius: 2px; }
+.hit.off .ctx mark { background: transparent; outline: 1px dashed #b89a00; }
+.hit .lb { flex: none; font-size: 12px; background: #eef1f6; border-radius: 4px; padding: 1px 6px; color: var(--ink); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hit .vr { flex: none; font-size: 11px; color: var(--warn); background: var(--warn-bg); border-radius: 4px; padding: 1px 5px; }
+.hit input[type=text] { width: 96px; padding: 2px 6px; font-size: 12.5px; flex: none; }
+.hit .x { flex: none; padding: 1px 6px; }
+#fails { margin: 6px 0 0; padding-left: 18px; }
+#fails li { cursor: pointer; text-decoration: underline; text-decoration-color: rgba(185, 58, 46, .4); }
+
+/* Markdown·되돌리기 */
+#md-text, #rs-in, #rs-out { flex: 1; min-height: 160px; resize: none; font-family: "D2Coding", Consolas, "Malgun Gothic", monospace; font-size: 13px; }
+#pane-md, #pane-rs { overflow: hidden; }
+.grow { flex: 1; }
+.count { color: var(--ink2); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+
+/* 진행 표시 */
+#busy { display: none; align-items: center; gap: 8px; color: var(--accent-ink); font-weight: 600; }
+#busy.on { display: flex; }
+.spin { width: 13px; height: 13px; border: 2px solid #b9c8ee; border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 알림 */
+#toasts { position: fixed; left: 50%; bottom: 46px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; z-index: 100; pointer-events: none; }
+.toast { background: #1d2433; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 13.5px; box-shadow: 0 4px 14px rgba(0, 0, 0, .25); max-width: 560px; }
+.toast.bad { background: var(--danger); }
+
+/* 대화 상자 */
+dialog { border: 0; border-radius: 12px; padding: 0; box-shadow: 0 16px 50px rgba(0, 0, 0, .3); color: var(--ink); }
+dialog::backdrop { background: rgba(20, 25, 38, .5); }
+#dlg-save { width: 440px; }
+#dlg-save form { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+#dlg-save h2 { margin: 0; font-size: 16px; }
+#dlg-save .fn { display: flex; align-items: center; gap: 6px; }
+#dlg-save .btns { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* 크게 보기 */
+#viewer { width: 96vw; height: 94vh; max-width: none; max-height: none; overflow: hidden; }
+#viewer .vwrap { display: flex; flex-direction: column; height: 100%; }
+#viewer .vbar { flex: none; display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+#viewer .vtitle { font-weight: 600; font-variant-numeric: tabular-nums; }
+#viewer .vhint { color: var(--ink2); font-size: 12.5px; margin-left: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#vscroll { flex: 1; overflow: auto; background: #6f7684; padding: 20px; text-align: center; }
+#vframe { position: relative; display: inline-block; text-align: left; }
+#vpage { position: absolute; left: 50%; top: 50%; background: #fff; box-shadow: 0 2px 12px rgba(0, 0, 0, .4); cursor: crosshair; }
+#vpage canvas { display: block; width: 100%; height: 100%; }
+#vmarks { position: absolute; inset: 0; }
+#vmarks .mk { cursor: pointer; pointer-events: auto; }
+#vmarks .mk.focus { box-shadow: 0 0 0 3px rgba(255, 120, 0, .85); }
+#vmarks .mk .del { position: absolute; right: -10px; top: -10px; width: 20px; height: 20px; padding: 0; border-radius: 10px; font-size: 11px; line-height: 1; }
+#vrubber { position: absolute; border: 2px dashed #e06a00; background: rgba(255, 140, 0, .2); display: none; pointer-events: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>PDF 업무 도구</h1>
+  <button id="btn-add" class="primary">파일 추가</button>
+  <input id="file-input" type="file" accept="application/pdf,.pdf" multiple hidden>
+  <span class="sep"></span>
+  <button id="btn-undo" title="실행 취소 (Ctrl+Z)" disabled>↶ 실행 취소</button>
+  <button id="btn-redo" title="다시 실행 (Ctrl+Shift+Z)" disabled>↷ 다시 실행</button>
+  <span class="sep"></span>
+  <button id="btn-save-all" disabled>전체 저장</button>
+  <button id="btn-save-sel" disabled>선택한 페이지만 저장</button>
+  <div class="local-note" title="모든 처리는 이 브라우저 안에서만 이루어집니다. 서버로 보내거나 저장하지 않습니다.">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.2 7V5a2.8 2.8 0 0 1 5.6 0v2"/></svg>
+    파일은 이 컴퓨터 밖으로 나가지 않습니다
+  </div>
+</header>
+
+<main>
+  <section id="stage">
+    <div id="scroller">
+      <div id="empty">
+        <div class="drop">
+          <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#8a92a3" stroke-width="1.4"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 18v-6M9.5 14.5 12 12l2.5 2.5"/></svg>
+          <h2>PDF 파일을 여기에 끌어다 놓으세요</h2>
+          <p>여러 개를 한꺼번에 넣을 수 있고, 작업 중에도 더 추가할 수 있습니다.</p>
+          <button id="btn-add2" class="primary">파일 선택</button>
+          <div><div class="safe">
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.2 7V5a2.8 2.8 0 0 1 5.6 0v2"/></svg>
+            파일은 이 컴퓨터 밖으로 나가지 않습니다
+          </div></div>
+          <ol class="steps">
+            <li>① PDF를 넣고 <b>편집</b> 탭에서 합치기·삭제·순서 정리</li>
+            <li>② <b>개인정보</b> 탭에서 이름을 입력하고 탐지 → 확인 → 적용</li>
+            <li>③ PDF로 저장하거나 <b>Markdown</b> 탭에서 복사</li>
+            <li>④ AI의 답을 <b>되돌리기</b> 탭에 붙여 넣어 실제 이름으로 복원</li>
+          </ol>
+        </div>
+      </div>
+      <div id="grid"><div id="insbar"></div></div>
+    </div>
+    <div id="dropveil">여기에 놓으면 추가됩니다</div>
+    <div id="statusbar">
+      <span id="st-count">파일 없음</span>
+      <span id="busy"><span class="spin"></span><span id="busy-text"></span></span>
+      <span class="grow"></span>
+      <span>썸네일 더블클릭: 크게 보기</span>
+      <a href="https://github.com/earthssaem/pdf" target="_blank" rel="noopener noreferrer" title="MuPDF(AGPL)를 사용하므로 소스를 공개합니다">소스·라이선스</a>
+    </div>
+  </section>
+
+  <aside id="panel">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="edit" aria-selected="true">편집</button>
+      <button class="tab" role="tab" data-tab="pii" aria-selected="false">개인정보</button>
+      <button class="tab" role="tab" data-tab="md" aria-selected="false">Markdown</button>
+      <button class="tab" role="tab" data-tab="rs" aria-selected="false">되돌리기</button>
+    </div>
+
+    <!-- 편집 -->
+    <div class="pane on" id="pane-edit">
+      <div class="sec">
+        <h3>선택한 페이지</h3>
+        <div id="sel-info" class="hint">선택한 페이지가 없습니다.</div>
+        <div class="row">
+          <button id="btn-rot-sel" disabled>↻ 90° 회전</button>
+          <button id="btn-del-sel" disabled>삭제</button>
+          <button id="btn-sel-all" disabled>전체 선택</button>
+          <button id="btn-sel-none" disabled>선택 해제</button>
+        </div>
+      </div>
+      <div class="sec">
+        <h3>넣은 파일</h3>
+        <ul class="files" id="file-list"></ul>
+        <div id="file-none" class="hint">아직 넣은 파일이 없습니다.</div>
+      </div>
+      <div class="sec">
+        <h3>사용법</h3>
+        <table class="keys">
+          <tr><td>순서 바꾸기</td><td>썸네일을 끌어서 옮기기 (다른 파일 사이로도 가능)</td></tr>
+          <tr><td>여러 장 선택</td><td><span class="kbd">Shift</span>+클릭 범위, <span class="kbd">Ctrl</span>+클릭 하나씩</td></tr>
+          <tr><td>삭제</td><td><span class="kbd">Delete</span> 또는 썸네일의 ✕</td></tr>
+          <tr><td>회전</td><td>썸네일의 ↻ (90°씩)</td></tr>
+          <tr><td>실행 취소</td><td><span class="kbd">Ctrl</span>+<span class="kbd">Z</span> · 다시 실행 <span class="kbd">Ctrl</span>+<span class="kbd">Shift</span>+<span class="kbd">Z</span></td></tr>
+          <tr><td>크게 보기</td><td>썸네일 더블클릭</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- 개인정보 -->
+    <div class="pane" id="pane-pii">
+      <div class="sec">
+        <h3>1. 지울 이름</h3>
+        <textarea id="names" rows="3" placeholder="김민지, 박준영&#10;(줄바꿈이나 쉼표로 여러 명)" autocomplete="off" spellcheck="false"></textarea>
+        <table class="maptbl" id="map-edit"></table>
+      </div>
+      <div class="sec">
+        <h3>2. 함께 찾을 항목</h3>
+        <label class="chk"><input type="checkbox" id="opt-rrn" checked> 주민등록번호 → [주민번호]</label>
+        <label class="chk"><input type="checkbox" id="opt-phone" checked> 휴대전화 → [전화번호]</label>
+        <label class="chk"><input type="checkbox" id="opt-email" checked> 이메일 → [이메일]</label>
+        <div class="row">
+          <label class="chk"><input type="checkbox" id="opt-sid"> 학번 → [학번]</label>
+          <input type="text" id="sid-fmt" value="#####" title="#은 숫자 한 자리입니다. 예: ##### (5자리), 3-##-## " autocomplete="off" spellcheck="false">
+          <span class="hint"># = 숫자 한 자리</span>
+        </div>
+        <label class="chk"><input type="checkbox" id="opt-var" checked> <span>이름 변형도 찾기 <span class="hint">— 띄어 쓴 이름(김 민 지)은 자동 체크, 성을 뺀 이름(민지)은 후보로만 표시</span></span></label>
+      </div>
+      <div class="row">
+        <button id="btn-detect" class="primary" disabled>탐지</button>
+        <span id="detect-info" class="hint"></span>
+      </div>
+      <div id="pii-stale" class="note warn" hidden></div>
+      <div class="sec" id="hits-sec" hidden>
+        <div class="row" style="flex-wrap:nowrap">
+          <h3 style="margin:0">3. 확인</h3>
+          <span class="grow"></span>
+          <button class="small" id="btn-chk-all">모두 체크</button>
+          <button class="small" id="btn-chk-none">모두 해제</button>
+        </div>
+        <div id="hits-count" class="hint"></div>
+        <div id="hits"></div>
+        <div class="hint">글 부분을 누르면 그 페이지를 크게 봅니다. 크게 보기에서 마우스로 끌면 지울 영역을 직접 추가할 수 있습니다(스캔본·사진·서명).</div>
+      </div>
+      <div class="sec">
+        <h3>4. 적용</h3>
+        <label class="chk"><input type="checkbox" id="opt-strip" checked> <span>문서 부속 정보 제거 <span class="hint">— 제목·작성자 등 메타데이터, 주석, 첨부파일, 양식 값</span></span></label>
+        <div class="row">
+          <button id="btn-apply" class="primary" disabled>적용 (글자 데이터 삭제)</button>
+          <button id="btn-revert" hidden>원본으로 되돌리기</button>
+        </div>
+        <div id="apply-result"></div>
+      </div>
+    </div>
+
+    <!-- Markdown -->
+    <div class="pane" id="pane-md">
+      <div id="md-warn" class="note warn" hidden></div>
+      <div class="sec">
+        <label class="chk"><input type="checkbox" id="md-nospace"> <span>공백 없이 잇기 <span class="hint">— 낱말 중간에서 줄이 바뀌는 문서일 때</span></span></label>
+        <label class="chk"><input type="checkbox" id="md-notice" checked> 맨 위에 가명 안내 한 줄 넣기</label>
+      </div>
+      <div class="row">
+        <button id="btn-md" class="primary" disabled>변환</button>
+        <span id="md-info" class="hint"></span>
+      </div>
+      <textarea id="md-text" placeholder="변환 결과가 여기에 나옵니다. 바로 고칠 수 있습니다." autocomplete="off" spellcheck="false"></textarea>
+      <div class="row">
+        <span class="count" id="md-count">0자</span>
+        <span class="grow"></span>
+        <button id="btn-md-copy" disabled>복사</button>
+        <button id="btn-md-save" disabled>.md로 저장</button>
+      </div>
+    </div>
+
+    <!-- 되돌리기 -->
+    <div class="pane" id="pane-rs">
+      <div class="hint">AI가 이름표로 쓴 글을 붙여 넣으면 실제 이름으로 바꿉니다. 대응표는 이 탭이 열려 있는 동안만 기억하며, 창을 닫거나 새로 고치면 사라집니다.</div>
+      <div id="rs-map" class="note info"></div>
+      <textarea id="rs-in" placeholder="[학생A]가 들어간 글을 여기에 붙여 넣으세요." autocomplete="off" spellcheck="false"></textarea>
+      <label class="chk"><input type="checkbox" id="rs-josa" checked> <span>조사 자동 맞춤 <span class="hint">— 은/는, 이/가, 을/를, 과/와, (으)로를 이름 받침에 맞춥니다</span></span></label>
+      <textarea id="rs-out" readonly placeholder="실제 이름으로 바뀐 글" spellcheck="false"></textarea>
+      <div class="row">
+        <span class="count" id="rs-count"></span>
+        <span class="grow"></span>
+        <button id="btn-rs-copy" class="primary" disabled>복사</button>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<div id="toasts" aria-live="polite"></div>
+
+<dialog id="dlg-save">
+  <form method="dialog">
+    <h2 id="dlg-save-title">PDF 저장</h2>
+    <div id="dlg-save-warn" class="note warn" hidden></div>
+    <div class="fn"><input type="text" id="save-name" autocomplete="off" spellcheck="false"><span id="save-ext">.pdf</span></div>
+    <div class="btns"><button type="button" id="save-cancel">취소</button><button type="submit" class="primary" id="save-ok">저장</button></div>
+  </form>
+</dialog>
+
+<dialog id="viewer">
+  <div class="vwrap">
+    <div class="vbar">
+      <button id="v-prev" title="이전 (←)">←</button>
+      <span class="vtitle" id="v-title"></span>
+      <button id="v-next" title="다음 (→)">→</button>
+      <span class="sep"></span>
+      <button id="v-zout" title="축소">－</button>
+      <button id="v-zin" title="확대">＋</button>
+      <span class="vhint" id="v-hint">마우스로 끌어서 지울 영역 추가 · 노란 표시를 누르면 체크/해제</span>
+      <span class="grow"></span>
+      <button id="v-close">닫기 (Esc)</button>
+    </div>
+    <div id="vscroll"><div id="vframe"><div id="vpage"><canvas></canvas><div id="vmarks"></div><div id="vrubber"></div></div></div></div>
+  </div>
+</dialog>
+
+<script src="lib/pdf-lib/pdf-lib.min.js"></script>
+
+<!-- MuPDF 작업용 워커 코드. 개인정보·Markdown 탭을 처음 열 때 실행된다. -->
+<script type="text/plain" id="worker-src">
+// MuPDF 작업용 Web Worker. index.html 안에 글자로 들어 있다가 Blob으로 실행된다.
+// 여기서 하는 일: 글자·좌표 추출, 개인정보 탐지, 글자 데이터 삭제(redaction), Markdown 변환.
+const mupdf = await import(MUPDF_URL);
+
+const store = new Map(); // "파일ID:판" -> { doc, models, labels }
+const keyOf = (fileId, ver) => fileId + ":" + ver;
+
+function putDoc(fileId, ver, bytes, labels) {
+  dropDoc(fileId, ver);
+  const doc = new mupdf.PDFDocument(bytes);
+  if (doc.needsPassword()) { doc.destroy(); throw new Error("암호가 걸린 PDF입니다."); }
+  const entry = { doc, bytes, n: doc.countPages(), models: new Map(), labels: labels || new Map(), stats: null };
+  store.set(keyOf(fileId, ver), entry);
+  return entry;
+}
+function dropDoc(fileId, ver) {
+  const k = keyOf(fileId, ver), old = store.get(k);
+  if (old) { try { old.doc.destroy(); } catch (e) {} store.delete(k); }
+}
+function getEntry(fileId, ver) {
+  const e = store.get(keyOf(fileId, ver));
+  if (!e) throw new Error("문서를 찾을 수 없습니다: " + fileId + "/" + ver);
+  return e;
+}
+
+/* ───────────── 좌표 변환(글자가 누운 페이지 대응) ───────────── */
+function fwd(k, W, H, x, y) {
+  if (k === 1) return [y, W - x];
+  if (k === 2) return [W - x, H - y];
+  if (k === 3) return [H - y, x];
+  return [x, y];
+}
+function inv(k, W, H, u, v) {
+  if (k === 1) return [W - v, u];
+  if (k === 2) return [W - u, H - v];
+  if (k === 3) return [v, H - u];
+  return [u, v];
+}
+function rectFwd(k, W, H, r) {
+  const a = fwd(k, W, H, r[0], r[1]), b = fwd(k, W, H, r[2], r[3]);
+  return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
+}
+function rectInv(k, W, H, r) {
+  const a = inv(k, W, H, r[0], r[1]), b = inv(k, W, H, r[2], r[3]);
+  return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
+}
+const quant = (dx, dy) => (Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? 0 : 2) : (dy > 0 ? 1 : 3));
+
+/* ───────────── 페이지에서 글자와 선 뽑기 ───────────── */
+const LABEL_FONT_RE = /Droid\s*Sans\s*Fallback/i;
+
+function extractModel(entry, idx) {
+  if (entry.models.has(idx)) return entry.models.get(idx);
+  const page = entry.doc.loadPage(idx);
+  const b = page.getBounds();
+  const W = b[2] - b[0], H = b[3] - b[1];
+  const fontCache = new Map();
+  const lblBoxes = entry.labels.get(idx) || [];
+  const inLabelBox = (x, y) => lblBoxes.some(bx => x >= bx.rect[0] - 0.5 && x <= bx.rect[2] + 0.5 && y >= bx.rect[1] - 0.5 && y <= bx.rect[3] + 0.5);
+  const lines = [];
+  let cur = null;
+  // 주석·양식 칸에 보이는 글자까지 함께 읽는다(본문만 읽으면 거기 남은 개인정보를 놓친다)
+  const dl = page.toDisplayList(true);
+  const st = dl.toStructuredText("preserve-whitespace");
+  st.walk({
+    beginLine(bbox, wmode, dir) { cur = { q: quant(dir[0], dir[1]), chars: [] }; },
+    onChar(c, origin, font, size, q) {
+      if (!cur) cur = { q: 0, chars: [] };
+      let fi = fontCache.get(font.pointer);
+      if (!fi) {
+        const name = font.getName();
+        fi = { name, bold: font.isBold() || /bold|heavy|black|extrab|[-_ ]B$/i.test(name), lbl: LABEL_FONT_RE.test(name) };
+        fontCache.set(font.pointer, fi);
+      }
+      const x0 = Math.min(q[0], q[2], q[4], q[6]) - b[0], y0 = Math.min(q[1], q[3], q[5], q[7]) - b[1];
+      const x1 = Math.max(q[0], q[2], q[4], q[6]) - b[0], y1 = Math.max(q[1], q[3], q[5], q[7]) - b[1];
+      // 이름표로 그려 넣은 글자인지: 이름표 글꼴이고, 이름표 상자 안에 있을 때만
+      const lbl = fi.lbl && lblBoxes.length > 0 && inLabelBox((x0 + x1) / 2, (y0 + y1) / 2);
+      cur.chars.push({ c, x0, y0, x1, y1, s: size, b: fi.bold, lbl });
+    },
+    endLine() { if (cur && cur.chars.length) lines.push(cur); cur = null; },
+  });
+  st.destroy();
+
+  // 표 테두리로 쓸 가로·세로 선
+  const hs = [], vs = [];
+  let segCount = 0;
+  const addSeg = (x0, y0, x1, y1) => {
+    if (segCount > 6000) return;
+    const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+    if (dy <= 0.7 && dx >= 4) { hs.push({ p: (y0 + y1) / 2 - b[1], a: Math.min(x0, x1) - b[0], b: Math.max(x0, x1) - b[0] }); segCount++; }
+    else if (dx <= 0.7 && dy >= 4) { vs.push({ p: (x0 + x1) / 2 - b[0], a: Math.min(y0, y1) - b[1], b: Math.max(y0, y1) - b[1] }); segCount++; }
+  };
+  const collect = (path, ctm, filled) => {
+    const subs = [];
+    let sub = null, curved = false;
+    const tp = (x, y) => [ctm[0] * x + ctm[2] * y + ctm[4], ctm[1] * x + ctm[3] * y + ctm[5]];
+    path.walk({
+      moveTo(x, y) { sub = { pts: [tp(x, y)], closed: false, curved: false }; subs.push(sub); },
+      lineTo(x, y) { if (sub) sub.pts.push(tp(x, y)); },
+      curveTo(x1, y1, x2, y2, x3, y3) { if (sub) { sub.curved = true; sub.pts.push(tp(x3, y3)); } },
+      closePath() { if (sub) sub.closed = true; },
+    });
+    for (const s of subs) {
+      if (s.curved || s.pts.length < 2) continue;
+      if (filled) {
+        // 가늘게 채운 사각형은 선으로 본다
+        const xs = s.pts.map(p => p[0]), ys = s.pts.map(p => p[1]);
+        const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+        if (s.pts.length > 6) continue;
+        if (y1 - y0 <= 2.2 && x1 - x0 >= 4) addSeg(x0, (y0 + y1) / 2, x1, (y0 + y1) / 2);
+        else if (x1 - x0 <= 2.2 && y1 - y0 >= 4) addSeg((x0 + x1) / 2, y0, (x0 + x1) / 2, y1);
+      } else {
+        for (let i = 1; i < s.pts.length; i++) addSeg(s.pts[i - 1][0], s.pts[i - 1][1], s.pts[i][0], s.pts[i][1]);
+        if (s.closed && s.pts.length > 2) { const l = s.pts[s.pts.length - 1], f = s.pts[0]; addSeg(l[0], l[1], f[0], f[1]); }
+      }
+    }
+  };
+  dl.destroy();
+  try {
+    // 콜백으로 받은 객체는 그 자리에서 바로 놓아준다. 나중에 자동 정리되도록 두면
+    // 이미 사라진 메모리를 다시 해제해 워커가 죽을 수 있다.
+    const free = (...objs) => { for (const o of objs) { try { o.destroy(); } catch (e) {} } };
+    const dev = new mupdf.Device({
+      fillPath(path, evenOdd, ctm, cs) { try { collect(path, ctm, true); } finally { free(path, cs); } },
+      strokePath(path, stroke, ctm, cs) { try { collect(path, ctm, false); } finally { free(path, stroke, cs); } },
+    });
+    page.run(dev, mupdf.Matrix.identity);
+    dev.close();
+    dev.destroy();
+  } catch (e) { /* 선을 못 읽어도 글자 처리는 계속한다 */ }
+  page.destroy();
+
+  // 글자 방향 중 가장 많은 쪽을 바로 선 방향으로 삼는다
+  const cnt = [0, 0, 0, 0];
+  for (const l of lines) for (const ch of l.chars) if (ch.c.trim()) cnt[l.q]++;
+  let k = 0;
+  for (let i = 1; i < 4; i++) if (cnt[i] > cnt[k]) k = i;
+  const UW = k % 2 ? H : W, UH = k % 2 ? W : H;
+
+  let cid = 0;
+  const frags = [];
+  for (const l of lines) {
+    const chars = l.chars.map(ch => {
+      const r = rectFwd(k, W, H, [ch.x0, ch.y0, ch.x1, ch.y1]);
+      return { id: cid++, c: ch.c, x0: r[0], y0: r[1], x1: r[2], y1: r[3], s: ch.s, b: ch.b, lbl: ch.lbl };
+    });
+    if (l.q === k) { const f = makeFrag(chars); if (f) frags.push(f); }
+    else for (const ch of chars) { const f = makeFrag([ch]); if (f) { f.odd = true; frags.push(f); } }
+  }
+  const tH = hs, tV = vs;
+  const H2 = [], V2 = [];
+  const pushT = (s, isH) => {
+    // 선도 같은 방향으로 돌린다
+    const r = isH ? rectFwd(k, W, H, [s.a, s.p, s.b, s.p]) : rectFwd(k, W, H, [s.p, s.a, s.p, s.b]);
+    if (r[3] - r[1] < r[2] - r[0]) H2.push({ p: (r[1] + r[3]) / 2, a: r[0], b: r[2] });
+    else V2.push({ p: (r[0] + r[2]) / 2, a: r[1], b: r[3] });
+  };
+  tH.forEach(s => pushT(s, true));
+  tV.forEach(s => pushT(s, false));
+
+  const model = { idx, W, H, k, UW, UH, frags, hs: mergeSegs(H2), vs: mergeSegs(V2), nchars: cnt[0] + cnt[1] + cnt[2] + cnt[3] };
+  entry.models.set(idx, model);
+  return model;
+}
+
+function makeFrag(chars) {
+  let a = 0, z = chars.length;
+  while (a < z && !chars[a].c.trim()) a++;
+  while (z > a && !chars[z - 1].c.trim()) z--;
+  if (a >= z) return null;
+  chars = chars.slice(a, z);
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  const sz = new Map();
+  let bold = true, lbl = true;
+  for (const ch of chars) {
+    if (!ch.c.trim()) continue;
+    x0 = Math.min(x0, ch.x0); y0 = Math.min(y0, ch.y0); x1 = Math.max(x1, ch.x1); y1 = Math.max(y1, ch.y1);
+    const s = Math.round(ch.s * 2) / 2;
+    sz.set(s, (sz.get(s) || 0) + 1);
+    if (!ch.b) bold = false;
+    if (!ch.lbl) lbl = false;
+  }
+  let size = 0, best = -1;
+  for (const [s, n] of sz) if (n > best) { best = n; size = s; }
+  return { chars, x0, y0, x1, y1, cy: (y0 + y1) / 2, h: y1 - y0, size, bold, lbl };
+}
+
+function mergeSegs(segs) {
+  segs.sort((s, t) => s.p - t.p || s.a - t.a);
+  const out = [];
+  let i = 0;
+  while (i < segs.length) {
+    let j = i;
+    const grp = [];
+    while (j < segs.length && segs[j].p - segs[i].p <= 1.2) grp.push(segs[j++]);
+    grp.sort((s, t) => s.a - t.a);
+    let cur = null;
+    for (const s of grp) {
+      if (cur && s.a <= cur.b + 2) { cur.b = Math.max(cur.b, s.b); cur.ps.push(s.p); }
+      else { if (cur) out.push(cur); cur = { a: s.a, b: s.b, ps: [s.p] }; }
+    }
+    if (cur) out.push(cur);
+    i = j;
+  }
+  return out.map(o => ({ p: o.ps.reduce((x, y) => x + y, 0) / o.ps.length, a: o.a, b: o.b }));
+}
+
+/* ───────────── 줄 만들기 ───────────── */
+// 같은 높이에 있는 조각을 한 줄로 묶고, 왼쪽부터 정렬한다.
+function buildRows(frags) {
+  const fs = frags.slice().sort((a, b) => a.cy - b.cy || a.x0 - b.x0);
+  const rows = [];
+  for (const f of fs) {
+    let row = null;
+    for (let i = rows.length - 1; i >= 0 && i >= rows.length - 8; i--) {
+      const r = rows[i];
+      if (!f.odd && !r.odd && Math.abs(r.cy - f.cy) <= 0.32 * Math.max(r.h, f.h)) { row = r; break; }
+    }
+    if (!row) { row = { frags: [], cy: f.cy, h: f.h, odd: !!f.odd }; rows.push(row); }
+    row.frags.push(f);
+    if (f.h > row.h && !f.lbl) { row.h = f.h; row.cy = f.cy; }
+  }
+  for (const r of rows) finishRow(r);
+  rows.sort((a, b) => a.cy - b.cy);
+  return rows;
+}
+
+function finishRow(r) {
+  r.frags.sort((a, b) => a.x0 - b.x0);
+  const sz = new Map();
+  let bold = true, n = 0;
+  r.x0 = 1e9; r.y0 = 1e9; r.x1 = -1e9; r.y1 = -1e9;
+  for (const f of r.frags) {
+    r.x0 = Math.min(r.x0, f.x0); r.x1 = Math.max(r.x1, f.x1);
+    if (!f.lbl) {
+      r.y0 = Math.min(r.y0, f.y0); r.y1 = Math.max(r.y1, f.y1);
+      sz.set(f.size, (sz.get(f.size) || 0) + f.chars.length);
+      if (!f.bold) bold = false;
+      n++;
+    }
+  }
+  if (!n) { for (const f of r.frags) { r.y0 = Math.min(r.y0, f.y0); r.y1 = Math.max(r.y1, f.y1); sz.set(f.size, 1); } bold = false; }
+  let size = 0, best = -1;
+  for (const [s, c] of sz) if (c > best) { best = c; size = s; }
+  r.size = size || 10; r.bold = bold;
+  // 글자 나열: 조각 사이가 벌어져 있으면 공백을 하나 끼운다
+  const seq = [];
+  let prev = null;
+  for (const f of r.frags) {
+    if (prev) {
+      const gap = f.x0 - prev.x1;
+      if (gap > 0.18 * r.size) seq.push({ c: " ", v: true });
+    }
+    for (const ch of f.chars) seq.push(ch);
+    prev = f;
+  }
+  // 칸 나누기: 글자 사이가 크게 벌어진 곳
+  const cellGap = Math.max(1.6 * r.size, 11);
+  const cells = [];
+  let cell = null, last = null;
+  for (const ch of seq) {
+    const blank = !ch.c.trim();
+    if (!blank) {
+      if (!cell || (last && ch.x0 - last.x1 >= cellGap)) { cell = { chars: [], x0: ch.x0, x1: ch.x1 }; cells.push(cell); }
+      cell.x1 = Math.max(cell.x1, ch.x1);
+      last = ch;
+    }
+    if (cell) cell.chars.push(ch);
+  }
+  for (const c of cells) c.text = textOf(c.chars).text;
+  r.cells = cells;
+  const t = textOf(seq);
+  r.text = t.text; r.map = t.map;
+}
+
+// 글자 목록을 문자열로 만들고, 문자열 위치마다 원래 글자를 기억해 둔다.
+function textOf(seq) {
+  let text = "";
+  const map = [];
+  for (const ch of seq) {
+    let c = ch.c;
+    if (!c.trim()) {
+      if (text && text[text.length - 1] !== " ") { text += " "; map.push(null); }
+      continue;
+    }
+    const n = c.normalize("NFKC");
+    if (n.length === 1) c = n;
+    for (let i = 0; i < c.length; i++) { text += c[i]; map.push(ch); }
+  }
+  while (text.endsWith(" ")) { text = text.slice(0, -1); map.pop(); }
+  return { text, map };
+}
+
+/* ───────────── 표 찾기(테두리 선 기준) ───────────── */
+function cluster(vals, tol) {
+  vals = vals.slice().sort((a, b) => a - b);
+  const out = [];
+  let grp = [];
+  for (const v of vals) {
+    if (grp.length && v - grp[grp.length - 1] > tol) { out.push(grp.reduce((a, b) => a + b, 0) / grp.length); grp = []; }
+    grp.push(v);
+  }
+  if (grp.length) out.push(grp.reduce((a, b) => a + b, 0) / grp.length);
+  return out;
+}
+
+function findTables(model) {
+  if (model.tables) return model.tables;
+  const hs = model.hs, vs = model.vs, tables = [];
+  model.tables = tables;
+  const nH = hs.length, n = nH + vs.length;
+  if (nH < 2 || vs.length < 2 || n > 1500) return tables;
+  const par = Array.from({ length: n }, (_, i) => i);
+  const find = i => { while (par[i] !== i) { par[i] = par[par[i]]; i = par[i]; } return i; };
+  const T = 2.5;
+  for (let i = 0; i < nH; i++) for (let j = 0; j < vs.length; j++) {
+    const h = hs[i], v = vs[j];
+    if (v.p >= h.a - T && v.p <= h.b + T && h.p >= v.a - T && h.p <= v.b + T) par[find(i)] = find(nH + j);
+  }
+  const comps = new Map();
+  for (let i = 0; i < n; i++) { const r = find(i); if (!comps.has(r)) comps.set(r, { H: [], V: [] }); (i < nH ? comps.get(r).H : comps.get(r).V).push(i < nH ? hs[i] : vs[i - nH]); }
+  for (const { H, V } of comps.values()) {
+    if (H.length < 2 || V.length < 2) continue;
+    const xs = cluster([...V.map(v => v.p), Math.min(...H.map(h => h.a)), Math.max(...H.map(h => h.b))], 3);
+    const ys = cluster([...H.map(h => h.p), Math.min(...V.map(v => v.a)), Math.max(...V.map(v => v.b))], 3);
+    const R = ys.length - 1, C = xs.length - 1;
+    if (R < 1 || C < 2 || R * C > 3000) continue;
+    // 칸 사이에 선이 없으면 병합된 칸으로 본다
+    const gp = Array.from({ length: R * C }, (_, i) => i);
+    const gf = i => { while (gp[i] !== i) { gp[i] = gp[gp[i]]; i = gp[i]; } return i; };
+    const covered = (list, p, a, b) => {
+      let cov = 0;
+      for (const s of list) if (Math.abs(s.p - p) <= 3) cov += Math.max(0, Math.min(s.b, b) - Math.max(s.a, a));
+      return cov >= 0.6 * (b - a);
+    };
+    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+      if (c + 1 < C && !covered(V, xs[c + 1], ys[r], ys[r + 1])) gp[gf(r * C + c)] = gf(r * C + c + 1);
+      if (r + 1 < R && !covered(H, ys[r + 1], xs[c], xs[c + 1])) gp[gf(r * C + c)] = gf((r + 1) * C + c);
+    }
+    const groups = new Map();
+    for (let i = 0; i < R * C; i++) {
+      const g = gf(i), r = Math.floor(i / C), c = i % C;
+      if (!groups.has(g)) groups.set(g, { r0: r, c0: c, r1: r, c1: c, n: 0, frags: [] });
+      const G = groups.get(g);
+      G.r0 = Math.min(G.r0, r); G.c0 = Math.min(G.c0, c); G.r1 = Math.max(G.r1, r); G.c1 = Math.max(G.c1, c); G.n++;
+    }
+    let odd = false, mergedAway = 0;
+    for (const G of groups.values()) {
+      if (G.n !== (G.r1 - G.r0 + 1) * (G.c1 - G.c0 + 1)) odd = true; // 네모가 아닌 병합
+      mergedAway += G.n - 1;
+    }
+    tables.push({ x0: xs[0], x1: xs[C], y0: ys[0], y1: ys[R], xs, ys, R, C, gf, groups, odd, mergedAway });
+  }
+  // 겹치는 표(표 안의 표)는 바깥 것만 쓰고 확인 필요로 표시한다
+  tables.sort((a, b) => (b.x1 - b.x0) * (b.y1 - b.y0) - (a.x1 - a.x0) * (a.y1 - a.y0));
+  const kept = [];
+  for (const t of tables) {
+    const outer = kept.find(o => t.x0 < o.x1 && t.x1 > o.x0 && t.y0 < o.y1 && t.y1 > o.y0);
+    if (outer) { outer.odd = true; continue; }
+    kept.push(t);
+  }
+  kept.sort((a, b) => a.y0 - b.y0);
+  model.tables = kept;
+  return kept;
+}
+
+// 조각을 표 안/밖으로 나누고, 표 안 글자는 칸별로 모은다.
+function splitByTables(model, frags) {
+  const tables = findTables(model);
+  for (const t of tables) for (const G of t.groups.values()) G.frags = [];
+  if (!tables.length) return { rest: frags, tables };
+  const rest = [];
+  const locate = ch => {
+    const cx = (ch.x0 + ch.x1) / 2, cy = (ch.y0 + ch.y1) / 2;
+    for (const t of tables) {
+      if (cx < t.x0 - 1 || cx > t.x1 + 1 || cy < t.y0 - 1 || cy > t.y1 + 1) continue;
+      let c = 0, r = 0;
+      while (c + 1 < t.C && cx > t.xs[c + 1]) c++;
+      while (r + 1 < t.R && cy > t.ys[r + 1]) r++;
+      return t.groups.get(t.gf(r * t.C + c));
+    }
+    return null;
+  };
+  for (const f of frags) {
+    let run = [], where;
+    const flush = () => {
+      if (!run.length) return;
+      const nf = makeFrag(run);
+      if (nf) { if (f.odd) nf.odd = true; (where ? where.frags : rest).push(nf); }
+      run = [];
+    };
+    for (const ch of f.chars) {
+      if (!ch.c.trim()) { run.push(ch); continue; }
+      const g = locate(ch);
+      if (run.length && g !== where) flush();
+      where = g;
+      run.push(ch);
+    }
+    flush();
+  }
+  return { rest, tables };
+}
+
+/* ───────────── 개인정보 탐지 ───────────── */
+const COMPOUND_SURNAMES = ["남궁", "황보", "제갈", "사공", "선우", "서문", "독고", "동방"];
+const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+function givenName(name) {
+  if (name.length >= 4 && COMPOUND_SURNAMES.includes(name.slice(0, 2))) return name.slice(2);
+  if (name.length >= 3) return name.slice(1);
+  return null;
+}
+
+function buildMatchers(cfg) {
+  const ms = [];
+  const names = (cfg.names || []).filter(n => n.name && n.name.length >= 2).slice().sort((a, b) => b.name.length - a.name.length);
+  for (const n of names) {
+    // 글자 사이: 기본은 줄바꿈만 허용, 변형 찾기를 켜면 띄어 쓴 것도 허용. 이름에 원래 있던 공백은 공백으로 맞춘다.
+    const sep = cfg.variants ? "\\s*" : "\\n?";
+    const src = n.name.trim().split(/\s+/).map(w => [...w].map(esc).join(sep)).join(cfg.variants ? "\\s*" : "\\s+");
+    ms.push({ type: "name", pri: 0, name: n.name, label: n.label, re: new RegExp(src, "g") });
+  }
+  if (cfg.rrn) ms.push({ type: "rrn", pri: 1, label: "[주민번호]", re: /(?<!\d)\d{6}[ ]?(?:[-–]\n?)?[ ]?[1-4]\d{6}(?!\d)/g });
+  if (cfg.phone) ms.push({ type: "phone", pri: 2, label: "[전화번호]", re: /(?<!\d)01[016789](?:[-. ]|-\n)?\d{3,4}(?:[-. ]|-\n)?\d{4}(?!\d)/g });
+  if (cfg.email) ms.push({ type: "email", pri: 3, label: "[이메일]", re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g });
+  if (cfg.sid) { try { ms.push({ type: "sid", pri: 4, label: "[학번]", re: new RegExp(cfg.sid, "g") }); } catch (e) {} }
+  if (cfg.variants) for (const n of names) {
+    const g = givenName(n.name.replace(/\s+/g, ""));
+    if (g && g.length >= 2) ms.push({ type: "name", variant: "given", pri: 5, name: n.name, label: n.label, re: new RegExp(esc(g), "g") });
+  }
+  return ms;
+}
+
+function detectUnits(model) {
+  if (model.units) return model.units;
+  const units = [];
+  const rows = buildRows(model.frags);
+  let text = "", map = [];
+  for (const r of rows) {
+    if (text) { text += "\n"; map.push(null); }
+    text += r.text; map.push(...r.map);
+  }
+  units.push({ text, map });
+  // 표 칸 안에서 줄이 바뀐 이름도 잡도록 칸별 글도 따로 본다
+  const { tables } = splitByTables(model, model.frags);
+  for (const t of tables) for (const G of t.groups.values()) {
+    if (!G.frags.length) continue;
+    const rs = buildRows(G.frags);
+    if (rs.length < 2) continue;
+    let tx = "", mp = [];
+    for (const r of rs) { if (tx) { tx += "\n"; mp.push(null); } tx += r.text; mp.push(...r.map); }
+    units.push({ text: tx, map: mp });
+  }
+  model.units = units;
+  return units;
+}
+
+function detectPage(model, matchers) {
+  const cands = [];
+  for (const unit of detectUnits(model)) {
+    for (const m of matchers) {
+      m.re.lastIndex = 0;
+      let x;
+      while ((x = m.re.exec(unit.text))) {
+        if (!x[0].length) { m.re.lastIndex++; continue; }
+        const s = x.index, e = s + x[0].length;
+        const chars = [];
+        for (let i = s; i < e; i++) if (unit.map[i] && !chars.includes(unit.map[i])) chars.push(unit.map[i]);
+        if (!chars.length) continue;
+        let variant = m.variant || null;
+        if (m.type === "name" && !variant) variant = /\n/.test(x[0]) ? "wrapped" : /\s/.test(x[0]) ? "spaced" : null;
+        cands.push({
+          m, chars, variant, len: chars.length,
+          text: x[0].replace(/\s+/g, " "),
+          before: unit.text.slice(Math.max(0, s - 10), s).replace(/\s+/g, " "),
+          after: unit.text.slice(e, e + 10).replace(/\s+/g, " "),
+        });
+      }
+    }
+  }
+  cands.sort((a, b) => a.m.pri - b.m.pri || b.len - a.len);
+  const used = new Set(), hits = [];
+  for (const c of cands) {
+    if (c.chars.some(ch => used.has(ch.id))) continue;
+    c.chars.forEach(ch => used.add(ch.id));
+    // 줄마다 네모 하나
+    const rects = [];
+    let cur = null;
+    for (const ch of c.chars.slice().sort((a, b) => (a.y0 + a.y1) - (b.y0 + b.y1) || a.x0 - b.x0)) {
+      const cy = (ch.y0 + ch.y1) / 2;
+      if (cur && cy >= cur[1] && cy <= cur[3]) { cur[0] = Math.min(cur[0], ch.x0); cur[1] = Math.min(cur[1], ch.y0); cur[2] = Math.max(cur[2], ch.x1); cur[3] = Math.max(cur[3], ch.y1); }
+      else { cur = [ch.x0, ch.y0, ch.x1, ch.y1]; rects.push(cur); }
+    }
+    hits.push({
+      page: model.idx, type: c.m.type, variant: c.variant, name: c.m.name || null, label: c.m.label,
+      text: c.text, before: c.before, after: c.after,
+      rects: rects.map(r => rectInv(model.k, model.W, model.H, r)),
+    });
+  }
+  hits.sort((a, b) => a.rects[0][1] - b.rects[0][1] || a.rects[0][0] - b.rects[0][0]);
+  return hits;
+}
+
+function opDetect({ fileId, ver, cfg }, progress) {
+  const entry = getEntry(fileId, ver);
+  const matchers = buildMatchers(cfg);
+  const hits = [];
+  for (let i = 0; i < entry.n; i++) {
+    hits.push(...detectPage(extractModel(entry, i), matchers));
+    progress(i + 1, entry.n);
+  }
+  return { hits };
+}
+
+/* ───────────── 글자 데이터 삭제(redaction) ───────────── */
+let koFont = null;
+const getFont = () => koFont || (koFont = new mupdf.Font("ko"));
+const hexOf = s => "<" + [...s].map(ch => (getFont().encodeCharacter(ch) || getFont().encodeCharacter("?")).toString(16).padStart(4, "0")).join("") + ">";
+const widthOf = s => [...s].reduce((w, ch) => w + getFont().advanceGlyph(getFont().encodeCharacter(ch) || getFont().encodeCharacter("?")), 0);
+const num = v => (Math.abs(v) < 1e-6 ? "0" : (+v.toFixed(3)).toString());
+
+// 이름표에 쓸 글자만 담은 작은 글꼴을 임시 문서에서 만든다(원본 글꼴은 건드리지 않는다).
+function makeLabelFont(labels) {
+  const tmp = new mupdf.PDFDocument();
+  const fref = tmp.addFont(getFont());
+  const res = tmp.addObject(tmp.newDictionary());
+  const fd = tmp.newDictionary();
+  fd.put("F", fref);
+  res.put("Font", fd);
+  const all = [...new Set([...(labels.join("") + "?[]")])].join("");
+  tmp.insertPage(-1, tmp.addPage([0, 0, 600, 100], 0, res, "BT /F 8 Tf 10 50 Td " + hexOf(all) + " Tj ET"));
+  try { tmp.subsetFonts(); } catch (e) {}
+  return { tmp, fref };
+}
+
+function opRedact({ fileId, items, strip }, progress) {
+  const src = getEntry(fileId, "orig");
+  const doc = new mupdf.PDFDocument(src.bytes.slice());
+  const byPage = new Map();
+  for (const it of items) { if (!byPage.has(it.page)) byPage.set(it.page, []); byPage.get(it.page).push(it); }
+  const lf = items.length ? makeLabelFont(items.map(i => i.label)) : null;
+  const fontRef = lf ? doc.graftObject(lf.fref) : null;
+  const labelBoxes = new Map();
+  const n = doc.countPages();
+  for (let p = 0; p < n; p++) {
+    const page = doc.loadPage(p);
+    const pobj = page.getObject();
+    const its = byPage.get(p) || [];
+    // 이 페이지의 글자 방향(0: 가로, 1: 아래로, 2: 뒤집힘, 3: 위로)
+    const k = its.length ? extractModel(src, p).k : 0;
+    if (its.length) {
+      const b = page.getBounds();
+      for (const it of its) for (const r of it.rects) {
+        const a = page.createAnnotation("Redact");
+        let rr = r;
+        if (it.kind !== "manual") {
+          // 이웃 글자를 건드리지 않게 조금 줄인다: 줄 두께 쪽은 10%, 글자가 이어지는 쪽은 아주 조금
+          const w = r[2] - r[0], h = r[3] - r[1];
+          const dx = k % 2 ? w * 0.1 : Math.min(0.4, w * 0.03), dy = k % 2 ? Math.min(0.4, h * 0.03) : h * 0.1;
+          rr = [r[0] + dx, r[1] + dy, r[2] - dx, r[3] - dy];
+        }
+        a.setRect([rr[0] + b[0], rr[1] + b[1], rr[2] + b[0], rr[3] + b[1]]);
+      }
+      page.applyRedactions(false, mupdf.PDFPage.REDACT_IMAGE_PIXELS, mupdf.PDFPage.REDACT_LINE_ART_REMOVE_IF_COVERED, mupdf.PDFPage.REDACT_TEXT_REMOVE);
+    }
+    if (strip) { pobj.delete("Annots"); pobj.delete("Metadata"); pobj.delete("PieceInfo"); pobj.delete("AA"); }
+    if (its.length) {
+      // 지운 자리에 상자와 이름표를 그린다
+      const b = page.getBounds();
+      const M = mupdf.Matrix.invert(page.getTransform());
+      let s = "\nQ\nq\n" + M.map(num).join(" ") + " cm\n";
+      const boxes = [];
+      for (const it of its) {
+        it.rects.forEach((r, ri) => {
+          const x = r[0] + b[0], y = r[1] + b[1], w = r[2] - r[0], h = r[3] - r[1];
+          const label = ri === 0 || it.kind === "manual" ? it.label : "";
+          s += "0.5 w 0.6 G 0.95 g " + [x + 0.3, y + 0.3, Math.max(0.5, w - 0.6), Math.max(0.5, h - 0.6)].map(num).join(" ") + " re B\n";
+          if (label) {
+            // 이름표는 그 페이지의 글자 방향을 따라 눕혀서 쓴다
+            const tw = widthOf(label) || 1;
+            const along = k % 2 ? h : w, thick = k % 2 ? w : h;
+            let size = Math.min(thick * 0.7, (along - 1.5) / tw);
+            if (it.kind === "manual") size = Math.min(size, 10);
+            size = Math.max(size, 2);
+            const X = [[1, 0], [0, 1], [-1, 0], [0, -1]][k], U = [[0, -1], [1, 0], [0, 1], [-1, 0]][k];
+            const half = tw * size / 2, cx = x + w / 2, cy = y + h / 2;
+            const tx = cx - half * X[0] - 0.36 * size * U[0], ty = cy - half * X[1] - 0.36 * size * U[1];
+            s += "BT /PiiLbl " + num(size) + " Tf 0.2 g " + [X[0], X[1], U[0], U[1], tx, ty].map(num).join(" ") + " Tm " + hexOf(label) + " Tj ET\n";
+            // Markdown에서 이 이름표를 끼워 넣을 자리(직접 그린 영역은 글자가 놓인 띠만)
+            const hx = Math.abs(half * X[0]) + Math.abs(0.6 * size * U[0]), hy = Math.abs(half * X[1]) + Math.abs(0.6 * size * U[1]);
+            const tr = it.kind === "manual" ? [cx - hx - b[0], cy - hy - b[1], cx + hx - b[0], cy + hy - b[1]] : r;
+            boxes.push({ rect: r, textRect: tr, label, kind: it.kind || "text" });
+          } else boxes.push({ rect: r, textRect: null, label: "", kind: it.kind || "text" });
+        });
+      }
+      s += "Q\n";
+      let res = pobj.getInheritable("Resources");
+      if (res.isNull()) res = doc.newDictionary();
+      // 다른 페이지와 같이 쓰는 사전일 수 있으니 복사본에 글꼴을 더한다
+      const nr = doc.newDictionary();
+      res.forEach((v, k) => nr.put(k, v));
+      const fonts = doc.newDictionary();
+      const of = res.get("Font");
+      if (!of.isNull()) of.forEach((v, k) => fonts.put(k, v));
+      nr.put("Font", fonts);
+      pobj.put("Resources", nr);
+      fonts.put("PiiLbl", fontRef);
+      const old = pobj.get("Contents");
+      const arr = doc.newArray();
+      arr.push(doc.addStream("q\n", {}));
+      if (old.isArray()) old.forEach(v => arr.push(v));
+      else if (!old.isNull()) arr.push(old);
+      arr.push(doc.addStream(s, {}));
+      pobj.put("Contents", arr);
+      labelBoxes.set(p, boxes);
+    }
+    page.destroy();
+    progress(p + 1, n);
+  }
+  if (strip) {
+    const trailer = doc.getTrailer();
+    trailer.delete("Info");
+    const root = trailer.get("Root");
+    for (const k of ["Metadata", "AcroForm", "Outlines", "StructTreeRoot", "MarkInfo", "PieceInfo", "OpenAction", "AA", "PageLabels", "Lang"]) root.delete(k);
+    const names = root.get("Names");
+    if (!names.isNull()) { names.delete("EmbeddedFiles"); names.delete("JavaScript"); }
+    root.delete("Collection");
+  }
+  const out = doc.saveToBuffer("garbage=4,compress=yes").asUint8Array().slice();
+  doc.destroy();
+  if (lf) lf.tmp.destroy();
+  putDoc(fileId, "red", out, labelBoxes);
+  return { bytes: out };
+}
+
+/* ───────────── 검증: 지운 뒤에 원래 문자열이 남았는지 ───────────── */
+// strings: 모든 페이지에서 찾아볼 문자열(이름), pageStrings: 그 페이지에서 지운 문자열
+function opVerify({ fileId, cfg, strings, pageStrings, areas }, progress) {
+  const entry = getEntry(fileId, "red");
+  const matchers = buildMatchers(cfg);
+  const hits = [], found = [], left = [];
+  const byPage = new Map();
+  for (const a of (areas || [])) { if (!byPage.has(a.page)) byPage.set(a.page, []); byPage.get(a.page).push(a); }
+  for (let i = 0; i < entry.n; i++) {
+    const model = extractModel(entry, i);
+    hits.push(...detectPage(model, matchers));
+    // MuPDF 자체 검색으로 한 번 더 확인한다
+    if (model.nchars) {
+      const page = entry.doc.loadPage(i);
+      const b = page.getBounds();
+      for (const s of new Set([...(strings || []), ...((pageStrings && pageStrings[i]) || [])])) {
+        let res = [];
+        try { res = page.search(s) || []; } catch (e) {}
+        for (const quads of res) {
+          let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+          for (const q of quads) { x0 = Math.min(x0, q[0], q[2], q[4], q[6]); x1 = Math.max(x1, q[0], q[2], q[4], q[6]); y0 = Math.min(y0, q[1], q[3], q[5], q[7]); y1 = Math.max(y1, q[1], q[3], q[5], q[7]); }
+          found.push({ page: i, text: s, rects: [[x0 - b[0], y0 - b[1], x1 - b[0], y1 - b[1]]] });
+        }
+      }
+      page.destroy();
+    }
+    // 지운 자리(탐지한 곳과 직접 그린 영역) 안에 글자가 일부라도 남았는지
+    for (const a of (byPage.get(i) || [])) {
+      const r = rectFwd(model.k, model.W, model.H, a.rect);
+      let rest = "";
+      for (const f of model.frags) for (const ch of f.chars) {
+        if (ch.lbl || !ch.c.trim()) continue;
+        const cx = (ch.x0 + ch.x1) / 2, cy = (ch.y0 + ch.y1) / 2;
+        if (cx > r[0] && cx < r[2] && cy > r[1] && cy < r[3]) rest += ch.c;
+      }
+      if (rest) left.push({ page: i, text: rest.slice(0, 20), rects: [a.rect] });
+    }
+    progress(i + 1, entry.n);
+  }
+  return { hits, found, left };
+}
+
+/* ───────────── Markdown 변환 ───────────── */
+const LIST_RE = /^(?:[□■○●◦◯◎◇◆▷▶▸►☐※*·•∙‧ㆍ❍]|[-–—]\s|\d{1,2}[.)](?!\d)|[가나다라마바사아자차카타파하][.)]|\(\d{1,2}\)|\([가나다라마바사아자차카타파하]\)|[①-⑳]|[㉮-㉻]|[ㄱ-ㅎ][.)]|[A-Za-z][.)]\s|붙임\s)/;
+const PAGENO_RE = /^(?:[-–—\s]*\d{1,4}[-–—\s]*|\d{1,4}\s*\/\s*\d{1,4}|(?:page|p\.?)\s*\d{1,4}|\d{1,4}\s*쪽|-\s*\d{1,4}\s*-)$/i;
+
+// 이름표 글자는 저장된 상자 위치를 써서 줄 안 제자리에 끼워 넣는다.
+function fragsForMarkdown(entry, model) {
+  const boxes = entry.labels.get(model.idx);
+  if (!boxes || !boxes.length) return model.frags;
+  const out = [];
+  for (const f of model.frags) {
+    if (!f.chars.some(ch => ch.lbl)) { out.push(f); continue; }
+    const keep = f.chars.filter(ch => !ch.lbl);
+    const nf = makeFrag(keep);
+    if (nf) out.push(nf);
+  }
+  // 줄 높이는 주변 글자에 맞춘다
+  let id = -1;
+  for (const bx of boxes) {
+    if (!bx.label) continue;
+    const r = rectFwd(model.k, model.W, model.H, bx.textRect || bx.rect);
+    const h = r[3] - r[1];
+    const chars = [...bx.label].map((c, i, a) => ({
+      id: id--, c, x0: r[0] + (r[2] - r[0]) * i / a.length, x1: r[0] + (r[2] - r[0]) * (i + 1) / a.length, y0: r[1], y1: r[3], s: h * 0.75, b: false, lbl: true,
+    }));
+    const nf = makeFrag(chars);
+    if (nf) out.push(nf);
+  }
+  return out;
+}
+
+function pageLayout(entry, idx) {
+  const model = extractModel(entry, idx);
+  if (model.layout) return model.layout;
+  const frags = fragsForMarkdown(entry, model);
+  const { rest, tables } = splitByTables(model, frags);
+  const rows = buildRows(rest);
+  const tbl = tables.map(t => {
+    const cells = [];
+    for (const G of t.groups.values()) cells.push({ r0: G.r0, c0: G.c0, r1: G.r1, c1: G.c1, rows: buildRows(G.frags), x0: t.xs[G.c0], x1: t.xs[G.c1 + 1] });
+    return { x0: t.x0, y0: t.y0, x1: t.x1, y1: t.y1, R: t.R, C: t.C, odd: t.odd, mergedAway: t.mergedAway, cells };
+  });
+  let nreal = 0;
+  for (const f of model.frags) if (!f.lbl) nreal += f.chars.length;
+  model.layout = { rows, tables: tbl, UW: model.UW, UH: model.UH, nreal };
+  return model.layout;
+}
+
+// 여러 페이지 같은 자리에 반복되는 머리글·바닥글·쪽번호를 찾는다.
+function fileStats(entry) {
+  if (entry.stats) return entry.stats;
+  const counts = new Map(), sizes = new Map();
+  const zoneKey = (r, L) => {
+    const top = r.y1 < L.UH * 0.1, bot = r.y0 > L.UH * 0.9;
+    if (!top && !bot) return null;
+    return (top ? "T" : "B") + Math.round(r.cy / 6) + "|" + r.text.replace(/\d+/g, "#").replace(/\s+/g, "");
+  };
+  for (let i = 0; i < entry.n; i++) {
+    const L = pageLayout(entry, i);
+    const seen = new Set();
+    for (const r of L.rows) {
+      sizes.set(r.size, (sizes.get(r.size) || 0) + r.text.length);
+      const k = zoneKey(r, L);
+      if (k && !seen.has(k)) { seen.add(k); counts.set(k, (counts.get(k) || 0) + 1); }
+    }
+    for (const t of L.tables) for (const c of t.cells) for (const r of c.rows) sizes.set(r.size, (sizes.get(r.size) || 0) + r.text.length);
+  }
+  let body = 10, best = -1;
+  for (const [s, n] of sizes) if (n > best) { best = n; body = s; }
+  const need = Math.max(2, Math.ceil(entry.n * 0.4));
+  const repeated = new Set();
+  for (const [k, n] of counts) if (n >= need) repeated.add(k);
+  // 본문보다 큰 글자 크기를 큰 순서로 제목 1~3단계에 배정한다
+  const hs = new Map();
+  for (let i = 0; i < entry.n; i++) for (const r of pageLayout(entry, i).rows) {
+    if (r.size >= body * 1.12 && r.text.length <= 80) hs.set(r.size, (hs.get(r.size) || 0) + 1);
+  }
+  const levels = [...hs.keys()].sort((a, b) => b - a);
+  entry.stats = { body, repeated, zoneKey, levels };
+  return entry.stats;
+}
+
+const cellEsc = s => s.replace(/\|/g, "\\|");
+// 줄을 이을 때 넣을 글자: 기본은 공백, 숫자-숫자처럼 붙임표에서 끊긴 곳은 붙인다
+const glue = (a, b, opts) => (opts.noSpace || (/[0-9A-Za-z][-–]$/.test(a) && /^[0-9A-Za-z]/.test(b)) ? "" : " ");
+
+function firstWordWidth(r) {
+  let x0 = null, x1 = null;
+  for (let i = 0; i < r.map.length; i++) {
+    const ch = r.map[i];
+    if (!ch) { if (x0 !== null) break; continue; }
+    if (x0 === null) x0 = ch.x0;
+    x1 = ch.x1;
+  }
+  return x0 === null ? 0 : x1 - x0;
+}
+function isWrapped(prev, next, right) {
+  if (prev.x1 >= right - Math.max(2.2 * prev.size, 10)) return true;
+  return prev.x1 + 0.25 * prev.size + firstWordWidth(next) > right - 0.3 * prev.size;
+}
+
+function joinRows(rows, right, opts, br) {
+  // 칸이나 문단 안의 여러 줄을 잇는다. 줄이 오른쪽 끝까지 찼으면 이어진 문장으로 본다.
+  let out = "";
+  let prev = null;
+  for (const r of rows) {
+    if (!r.text) continue;
+    if (prev === null) out = r.text;
+    else {
+      if (isWrapped(prev, r, right) && !LIST_RE.test(r.text)) out += glue(out, r.text, opts) + r.text;
+      else out += br + r.text;
+    }
+    prev = r;
+  }
+  return out;
+}
+
+function tableToMd(t, opts) {
+  const grid = Array.from({ length: t.R }, () => Array(t.C).fill(""));
+  let filled = 0;
+  for (const c of t.cells) {
+    const txt = joinRows(c.rows, c.x1 - 3, opts, "<br>");
+    if (txt) { grid[c.r0][c.c0] = cellEsc(txt); filled++; }
+  }
+  // 완전히 빈 행·열은 뺀다
+  let rowsKeep = grid.map((row, i) => i).filter(i => grid[i].some(v => v));
+  let colsKeep = Array.from({ length: t.C }, (_, j) => j).filter(j => grid.some(row => row[j]));
+  if (!filled) return { md: "", ok: true, empty: true };
+  if (colsKeep.length < 2) {
+    // 한 칸짜리 상자는 표가 아니라 그냥 글로 둔다
+    return { md: rowsKeep.map(i => grid[i][colsKeep[0]].replace(/<br>/g, "\n")).join("\n\n"), ok: true };
+  }
+  const total = t.R * t.C;
+  const ambiguous = t.odd || (total >= 6 && t.mergedAway / total > 0.5);
+  if (ambiguous) return { md: "", ok: false };
+  const lines = [];
+  rowsKeep.forEach((i, n) => {
+    lines.push("| " + colsKeep.map(j => grid[i][j]).join(" | ") + " |");
+    if (n === 0) lines.push("| " + colsKeep.map(() => "---").join(" | ") + " |");
+  });
+  return { md: lines.join("\n"), ok: true };
+}
+
+// 배치를 유지한 글자(표 인식이 애매할 때)
+function layoutText(rows) {
+  const lines = rows.map(r => r.cells.map(c => c.text).join("    "));
+  return "⚠ 표 확인 필요\n\n```text\n" + lines.join("\n") + "\n```";
+}
+
+// 테두리 없는 표: 여러 줄에 걸쳐 같은 자리에 빈 띠(강)가 있으면 열로 본다.
+function findLooseTables(rows) {
+  const out = []; // {from, to, cols:[x경계], ok}
+  let i = 0;
+  while (i < rows.length) {
+    if (rows[i].cells.length < 2 || rows[i].heading) { i++; continue; }
+    let j = i, multi = 0;
+    let rivers = null;
+    const pitch = rows[i].h * 2.4;
+    while (j < rows.length) {
+      const r = rows[j];
+      if (j > i && r.y0 - rows[j - 1].y1 > pitch) break;
+      if (r.heading) break;
+      // 이 줄의 빈 띠
+      const gaps = [];
+      for (let c = 0; c + 1 < r.cells.length; c++) gaps.push([r.cells[c].x1, r.cells[c + 1].x0]);
+      let next;
+      if (rivers === null) next = gaps;
+      else {
+        // 지금까지의 강 가운데 이 줄 글자가 가로막지 않는 부분만 남긴다
+        next = [];
+        for (const rv of rivers) {
+          let a = rv[0], b = rv[1], blocked = false;
+          for (const c of r.cells) {
+            if (c.x1 <= a + 0.5 || c.x0 >= b - 0.5) continue;
+            if (c.x0 <= a + 0.5 && c.x1 >= b - 0.5) { blocked = true; break; }
+            if (c.x0 > a && c.x1 < b) { blocked = true; break; }
+            if (c.x0 <= a + 0.5) a = c.x1; else b = c.x0;
+          }
+          if (!blocked && b - a >= 5) next.push([a, b]);
+        }
+      }
+      if (!next.length) break;
+      rivers = next;
+      if (r.cells.length >= 2) multi++;
+      j++;
+    }
+    // 끝에 붙은 한 칸짜리 줄은 표에서 뺀다
+    while (j > i && rows[j - 1].cells.length < 2) j--;
+    const ncol = rivers ? rivers.length + 1 : 0;
+    let same = 0;
+    for (let k = i; k < j; k++) if (rows[k].cells.length === ncol) same++;
+    const looksTable = j - i >= 2 && (multi >= 3 || (multi >= 2 && ncol >= 3));
+    if (looksTable && same >= 0.6 * multi) { out.push({ from: i, to: j, rivers: rivers.slice().sort((a, b) => a[0] - b[0]), ok: true }); i = j; }
+    else if (looksTable && multi >= 3) { out.push({ from: i, to: j, ok: false }); i = j; } // 칸 수가 들쭉날쭉하면 확인 필요
+    else {
+      // 여러 칸짜리 줄이 3줄 넘게 이어지는데 열이 안 맞으면 확인 필요
+      let k2 = i;
+      while (k2 < rows.length && rows[k2].cells.length >= 3 && !rows[k2].heading && (k2 === i || rows[k2].y0 - rows[k2 - 1].y1 <= pitch)) k2++;
+      if (k2 - i >= 3) { out.push({ from: i, to: k2, ok: false }); i = k2; }
+      else i++;
+    }
+  }
+  return out;
+}
+
+function looseTableMd(rows, lt, opts) {
+  const xs = lt.rivers.map(r => (r[0] + r[1]) / 2);
+  const C = xs.length + 1;
+  const lines = [];
+  let grid = [];
+  for (let i = lt.from; i < lt.to; i++) {
+    const r = rows[i];
+    const row = Array(C).fill("");
+    for (const c of r.cells) {
+      const cx = (c.x0 + c.x1) / 2;
+      let col = 0;
+      while (col < xs.length && cx > xs[col]) col++;
+      row[col] = (row[col] ? row[col] + " " : "") + c.text;
+    }
+    // 첫 칸이 빈 줄은 윗줄 칸에서 줄이 바뀐 것으로 보고 이어 붙인다
+    if (grid.length && r.cells.length < C && !row[0]) {
+      const up = grid[grid.length - 1];
+      row.forEach((v, c) => { if (v) up[c] = up[c] ? up[c] + (opts.noSpace ? "" : " ") + v : v; });
+    } else grid.push(row);
+  }
+  grid.forEach((row, n) => {
+    lines.push("| " + row.map(cellEsc).join(" | ") + " |");
+    if (n === 0) lines.push("| " + row.map(() => "---").join(" | ") + " |");
+  });
+  return lines.join("\n");
+}
+
+function pageToMd(entry, idx, opts) {
+  const L = pageLayout(entry, idx);
+  const st = fileStats(entry);
+  if (!L.nreal) return null; // 글자 없음
+  // 머리글·바닥글·쪽번호 제거
+  let rows = L.rows.filter(r => {
+    const k = st.zoneKey(r, L);
+    if (!k) return true;
+    if (r.size > st.body * 1.08) return true; // 본문보다 큰 글자는 제목일 수 있으니 남긴다
+    if (st.repeated.has(k)) return false;
+    if (PAGENO_RE.test(r.text.trim())) return false;
+    return true;
+  });
+  // 제목 표시
+  for (const r of rows) {
+    r.heading = 0;
+    const t = r.text;
+    if (r.odd || t.length > 80 || LIST_RE.test(t)) continue;
+    const li = st.levels.indexOf(r.size);
+    if (r.size >= st.body * 1.12 && li >= 0) r.heading = Math.min(3, li + 1);
+    else if (r.bold && t.length <= 40 && r.cells.length === 1 && !/[.。,:;]$/.test(t) && Math.abs(r.size - st.body) < 0.6) r.heading = Math.min(3, st.levels.length + 1);
+  }
+  const loose = findLooseTables(rows);
+  const looseAt = new Map();
+  loose.forEach(l => looseAt.set(l.from, l));
+  // 본문 오른쪽 끝
+  let right = 0;
+  for (const r of rows) if (!r.heading && !r.odd) right = Math.max(right, r.x1);
+  // 줄과 표를 위에서 아래 순서로 늘어놓는다
+  const items = [];
+  for (let i = 0; i < rows.length; i++) {
+    const lt = looseAt.get(i);
+    if (lt) { items.push({ y: rows[i].y0, type: "loose", lt }); i = lt.to - 1; continue; }
+    items.push({ y: rows[i].y0, type: "row", row: rows[i] });
+  }
+  for (const t of L.tables) items.push({ y: t.y0, type: "table", t });
+  items.sort((a, b) => a.y - b.y);
+
+  const blocks = [];
+  let para = null; // {lines:[row], list}
+  const flush = () => {
+    if (!para) return;
+    let text = para.rows[0].text;
+    for (let i = 1; i < para.rows.length; i++) text += glue(text, para.rows[i].text, opts) + para.rows[i].text;
+    if (para.heading) blocks.push({ kind: "h", text: "#".repeat(para.heading) + " " + text });
+    else blocks.push({ kind: para.list ? "li" : "p", text });
+    para = null;
+  };
+  for (const it of items) {
+    if (it.type === "table") {
+      flush();
+      const res = tableToMd(it.t, opts);
+      if (res.ok) { if (res.md) blocks.push({ kind: "t", text: res.md }); }
+      else {
+        const all = [];
+        for (const c of it.t.cells) for (const r of c.rows) all.push(...r.frags);
+        blocks.push({ kind: "t", text: layoutText(buildRows(all)) });
+      }
+      continue;
+    }
+    if (it.type === "loose") {
+      flush();
+      blocks.push({ kind: "t", text: it.lt.ok ? looseTableMd(rows, it.lt, opts) : layoutText(rows.slice(it.lt.from, it.lt.to)) });
+      continue;
+    }
+    const r = it.row;
+    if (!r.text) continue;
+    const isList = LIST_RE.test(r.text);
+    let cont = false;
+    if (para && !isList && r.heading === para.heading) {
+      const prev = para.rows[para.rows.length - 1];
+      const gapOk = r.y0 - prev.y1 <= Math.max(prev.h, r.h) * 0.95;
+      const sizeOk = Math.abs(r.size - prev.size) <= 0.6;
+      if (para.heading) cont = gapOk && sizeOk;
+      else {
+        cont = gapOk && sizeOk && isWrapped(prev, r, right) && !r.odd && !prev.odd;
+        if (cont && para.rows.length >= 2) {
+          // 둘째 줄 왼쪽 끝과 다르게 들여 쓰거나 내어 쓰면 새 문단
+          const base = para.rows[1].x0;
+          if (Math.abs(r.x0 - base) > 0.8 * r.size) cont = false;
+        }
+      }
+    }
+    if (cont) para.rows.push(r);
+    else { flush(); para = { rows: [r], heading: r.heading, list: isList }; }
+  }
+  flush();
+  // 목록 줄끼리는 빈 줄 없이 붙인다
+  let md = "";
+  let prevKind = null;
+  for (const b of blocks) {
+    if (md) md += (b.kind === "li" && prevKind === "li") ? "\n" : "\n\n";
+    md += b.text;
+    prevKind = b.kind;
+  }
+  return md;
+}
+
+function opMarkdown({ fileId, ver, pages, opts }, progress) {
+  const entry = getEntry(fileId, ver);
+  const out = {};
+  pages.forEach((p, i) => {
+    out[p] = pageToMd(entry, p, opts || {});
+    progress(i + 1, pages.length);
+  });
+  return { pages: out };
+}
+
+/* ───────────── 메시지 처리 ───────────── */
+const ops = {
+  open({ fileId, ver, bytes }) { const e = putDoc(fileId, ver, bytes); return { pages: e.n }; },
+  close({ fileId }) { dropDoc(fileId, "orig"); dropDoc(fileId, "red"); return {}; },
+  dropRedacted({ fileId }) { dropDoc(fileId, "red"); return {}; },
+  detect: opDetect,
+  redact: opRedact,
+  verify: opVerify,
+  markdown: opMarkdown,
+  // pdf-lib이 못 읽는 파일을 MuPDF로 한 번 고쳐 쓴다
+  repair({ bytes }) {
+    const doc = new mupdf.PDFDocument(bytes);
+    const out = doc.saveToBuffer("garbage=2,compress=yes").asUint8Array().slice();
+    doc.destroy();
+    return { bytes: out };
+  },
+};
+
+self.onmessage = e => {
+  const { id, op, args } = e.data;
+  try {
+    const res = ops[op](args, (done, total) => self.postMessage({ id, progress: [done, total] }));
+    self.postMessage({ id, ok: true, result: res });
+  } catch (err) {
+    self.postMessage({ id, ok: false, error: String(err && err.message || err) });
+  }
+};
+self.postMessage({ ready: true });
+</script>
+
+<script type="module">
+import * as pdfjsLib from "./lib/pdfjs/pdf.min.mjs";
+
+/* ───────────── 기본 도구 ───────────── */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const abs = p => new URL(p, location.href).href;
+const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const html = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const FILE_COLORS = ["#2f6fed", "#e0662b", "#1a9b6c", "#b0499b", "#c79a00", "#3aa5c9", "#d2475a", "#6a6fd6", "#5f7a2a", "#8b5e3c"];
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = abs("lib/pdfjs/pdf.worker.min.mjs");
+const PDFJS_OPTS = {
+  cMapUrl: abs("lib/pdfjs/cmaps/"), cMapPacked: true,
+  standardFontDataUrl: abs("lib/pdfjs/standard_fonts/"),
+  wasmUrl: abs("lib/pdfjs/wasm/"), iccUrl: abs("lib/pdfjs/iccs/"),
+  isEvalSupported: false, enableXfa: false, stopAtErrors: false,
+};
+
+function toast(msg, bad) {
+  const t = el("div", "toast" + (bad ? " bad" : ""), msg);
+  $("#toasts").append(t);
+  setTimeout(() => t.remove(), bad ? 6500 : 3200);
+}
+let busyN = 0;
+function busy(text) {
+  busyN++;
+  $("#busy").classList.add("on");
+  $("#busy-text").textContent = text;
+  return { set(t) { $("#busy-text").textContent = t; }, done() { if (--busyN <= 0) { busyN = 0; $("#busy").classList.remove("on"); } } };
+}
+
+/* ───────────── 상태(모두 메모리에만 둔다) ───────────── */
+const S = {
+  files: new Map(),  // id -> { id, name, color, bytes, red, pdf, task, n, dims: Map }
+  pages: [],         // [{ id, f, i, r }]  현재 순서
+  sel: new Set(), anchor: null,
+  undo: [], redo: [],
+  tab: "edit", seq: 0,
+};
+const P = {            // 개인정보
+  hits: [], manual: [], overrides: new Map(), labels: new Map(), labelSeq: 0,
+  scanned: new Set(), state: "none", cfgStale: false, dirty: false, failures: [], cfg: null, working: false,
+};
+const M = { done: false, stale: false, edited: false, working: false };
+
+const fileOf = p => S.files.get(p.f);
+const baseName = n => n.replace(/\.pdf$/i, "");
+const isApplied = () => P.state === "applied";
+
+/* ───────────── 파일 넣기 ───────────── */
+async function addFiles(list) {
+  const picked = [...list].filter(f => /\.pdf$/i.test(f.name) || f.type === "application/pdf");
+  if (!picked.length) { if (list.length) toast("PDF 파일만 넣을 수 있습니다.", true); return; }
+  const b = busy("파일을 여는 중…");
+  const added = [];
+  for (const file of picked) {
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const task = pdfjsLib.getDocument({ ...PDFJS_OPTS, data: bytes.slice() });
+      task.onPassword = () => { throw Object.assign(new Error("password"), { name: "PasswordException" }); };
+      const pdf = await task.promise;
+      if (await pdf.getPermissions()) { await task.destroy(); throw Object.assign(new Error("encrypted"), { name: "PasswordException" }); }
+      const id = "f" + (++S.seq);
+      const f = { id, name: file.name, color: FILE_COLORS[S.files.size % FILE_COLORS.length], bytes, red: null, pdf, task, n: pdf.numPages, dims: new Map(), inWorker: false };
+      S.files.set(id, f);
+      for (let i = 0; i < f.n; i++) added.push({ id: "p" + (++S.seq), f: id, i, r: 0 });
+    } catch (e) {
+      if (e && e.name === "PasswordException") toast(`암호가 걸린 PDF는 열 수 없습니다: ${file.name}`, true);
+      else { console.warn(e); toast(`PDF를 읽을 수 없습니다: ${file.name}`, true); }
+    }
+  }
+  b.done();
+  if (added.length) {
+    commit(S.pages.concat(added));
+    if (P.state !== "none") { P.cfgStale = true; }
+    renderPii();
+  }
+}
+
+async function reloadPdf(f) {
+  const old = f.task;
+  f.task = pdfjsLib.getDocument({ ...PDFJS_OPTS, data: (f.red || f.bytes).slice() });
+  f.pdf = await f.task.promise;
+  if (old) old.destroy().catch(() => {});
+  for (const p of S.pages) if (p.f === f.id) invalidateThumb(p.id);
+}
+
+async function pageDims(f, i) {
+  if (!f.dims.has(i)) {
+    const pg = await f.pdf.getPage(i + 1);
+    const vp = pg.getViewport({ scale: 1 });
+    f.dims.set(i, { w: vp.width, h: vp.height });
+  }
+  return f.dims.get(i);
+}
+
+/* ───────────── 실행 취소 ───────────── */
+function commit(pages, keepSel) {
+  S.undo.push({ pages: S.pages, sel: [...S.sel] });
+  if (S.undo.length > 200) S.undo.shift();
+  S.redo = [];
+  S.pages = pages;
+  if (!keepSel) { const ids = new Set(pages.map(p => p.id)); S.sel = new Set([...S.sel].filter(id => ids.has(id))); }
+  afterPagesChange();
+}
+function undo() {
+  if (!S.undo.length) return;
+  const s = S.undo.pop();
+  S.redo.push({ pages: S.pages, sel: [...S.sel] });
+  S.pages = s.pages; S.sel = new Set(s.sel);
+  afterPagesChange();
+}
+function redo() {
+  if (!S.redo.length) return;
+  const s = S.redo.pop();
+  S.undo.push({ pages: S.pages, sel: [...S.sel] });
+  S.pages = s.pages; S.sel = new Set(s.sel);
+  afterPagesChange();
+}
+function afterPagesChange() {
+  if (M.done) M.stale = true;
+  renderGrid(); renderEdit(); renderPii(); renderMd();
+}
+
+/* ───────────── 편집 동작 ───────────── */
+function deletePages(ids) {
+  if (!ids.size) return;
+  commit(S.pages.filter(p => !ids.has(p.id)));
+}
+function rotatePages(ids) {
+  if (!ids.size) return;
+  commit(S.pages.map(p => (ids.has(p.id) ? { ...p, r: (p.r + 90) % 360 } : p)), true);
+}
+function movePages(ids, index) {
+  // index: 현재 목록에서 끼워 넣을 자리(0..길이)
+  const moving = S.pages.filter(p => ids.has(p.id));
+  if (!moving.length) return;
+  let at = 0;
+  for (let k = 0; k < index && k < S.pages.length; k++) if (!ids.has(S.pages[k].id)) at++;
+  const rest = S.pages.filter(p => !ids.has(p.id));
+  rest.splice(at, 0, ...moving);
+  if (rest.every((p, k) => p === S.pages[k])) return;
+  commit(rest, true);
+}
+function selectClick(id, e) {
+  const order = S.pages.map(p => p.id);
+  if (e.shiftKey && S.anchor && order.includes(S.anchor)) {
+    const a = order.indexOf(S.anchor), b = order.indexOf(id);
+    const range = order.slice(Math.min(a, b), Math.max(a, b) + 1);
+    if (!(e.ctrlKey || e.metaKey)) S.sel.clear();
+    range.forEach(x => S.sel.add(x));
+  } else if (e.ctrlKey || e.metaKey) {
+    S.sel.has(id) ? S.sel.delete(id) : S.sel.add(id);
+    S.anchor = id;
+  } else {
+    S.sel = new Set([id]);
+    S.anchor = id;
+  }
+  renderSel();
+}
+
+/* ───────────── 썸네일 격자 ───────────── */
+const grid = $("#grid"), scroller = $("#scroller"), insbar = $("#insbar");
+const thumbEls = new Map(); // 페이지 id -> 요소
+const TB_W = 150, TB_H = 190;
+
+function fitPage(elm, dims, r, boxW, boxH) {
+  const rw = r % 180 ? dims.h : dims.w, rh = r % 180 ? dims.w : dims.h;
+  const s = Math.min(boxW / rw, boxH / rh);
+  elm.style.width = dims.w * s + "px";
+  elm.style.height = dims.h * s + "px";
+  elm.style.transform = `translate(-50%, -50%) rotate(${r}deg)`;
+  return s;
+}
+
+function makeThumb(p) {
+  const f = fileOf(p);
+  const t = el("div", "thumb");
+  t.dataset.id = p.id;
+  t.draggable = true;
+  t.style.setProperty("--fc", f.color);
+  t.innerHTML = `<div class="tnum"></div>
+    <div class="tbtns"><button class="rot" title="90° 회전" tabindex="-1">↻</button><button class="del" title="이 페이지 삭제" tabindex="-1">✕</button></div>
+    <div class="tbox"><div class="tpage"><canvas></canvas><div class="marks"></div></div></div>
+    <div class="tcap"><span class="chip"></span><span class="nm"></span><span class="pg"></span></div>`;
+  $(".nm", t).textContent = baseName(f.name);
+  $(".nm", t).title = f.name;
+  $(".pg", t).textContent = (p.i + 1) + "쪽";
+  fitPage($(".tpage", t), f.dims.get(p.i) || { w: 595, h: 842 }, p.r, TB_W - 6, TB_H - 6);
+  t._r = p.r;
+  io.observe(t);
+  return t;
+}
+
+function renderGrid() {
+  const alive = new Set();
+  const nodes = [];
+  S.pages.forEach((p, k) => {
+    alive.add(p.id);
+    let t = thumbEls.get(p.id);
+    if (!t) { t = makeThumb(p); thumbEls.set(p.id, t); }
+    if (t._r !== p.r) {
+      t._r = p.r;
+      fitPage($(".tpage", t), fileOf(p).dims.get(p.i) || { w: 595, h: 842 }, p.r, TB_W - 6, TB_H - 6);
+    }
+    $(".tnum", t).textContent = k + 1;
+    nodes.push(t);
+  });
+  // 순서가 달라진 경우에만 다시 붙인다
+  const cur = $$(".thumb", grid);
+  if (cur.length !== nodes.length || cur.some((n, k) => n !== nodes[k])) {
+    for (const n of cur) if (!alive.has(n.dataset.id)) n.remove();
+    for (const n of nodes) grid.append(n);
+  }
+  $("#empty").style.display = S.files.size ? "none" : "";
+  renderSel();
+  renderMarks();
+  const nf = new Set(S.pages.map(p => p.f)).size;
+  $("#st-count").textContent = S.pages.length ? `파일 ${nf}개 · ${S.pages.length}쪽` : (S.files.size ? "페이지가 없습니다 (Ctrl+Z로 되돌릴 수 있습니다)" : "파일 없음");
+  $("#btn-undo").disabled = !S.undo.length;
+  $("#btn-redo").disabled = !S.redo.length;
+  $("#btn-save-all").disabled = !S.pages.length;
+}
+
+function renderSel() {
+  for (const [id, t] of thumbEls) t.classList.toggle("sel", S.sel.has(id));
+  const n = S.sel.size;
+  $("#sel-info").textContent = S.pages.length ? (n ? `전체 ${S.pages.length}쪽 중 ${n}쪽을 선택했습니다.` : `전체 ${S.pages.length}쪽. 선택한 페이지가 없습니다.`) : "선택한 페이지가 없습니다.";
+  $("#btn-rot-sel").disabled = $("#btn-del-sel").disabled = $("#btn-sel-none").disabled = $("#btn-save-sel").disabled = !n;
+  $("#btn-sel-all").disabled = !S.pages.length;
+}
+
+// 화면에 보이는 썸네일부터 그린다
+const renderQueue = [];
+let rendering = false;
+const io = new IntersectionObserver(entries => {
+  for (const e of entries) {
+    if (e.isIntersecting && !e.target._done && !e.target._queued) { e.target._queued = true; renderQueue.push(e.target); }
+  }
+  pumpThumbs();
+}, { root: scroller, rootMargin: "400px 0px" });
+
+function invalidateThumb(id) {
+  const t = thumbEls.get(id);
+  if (!t) return;
+  t._done = false; t._queued = false;
+  io.unobserve(t); io.observe(t);
+}
+
+async function pumpThumbs() {
+  if (rendering) return;
+  rendering = true;
+  while (renderQueue.length) {
+    const t = renderQueue.shift();
+    t._queued = false;
+    const p = S.pages.find(x => x.id === t.dataset.id);
+    if (!p || !t.isConnected) continue;
+    const f = fileOf(p);
+    try {
+      const pdf = f.pdf;
+      const pg = await pdf.getPage(p.i + 1);
+      const base = pg.getViewport({ scale: 1 });
+      f.dims.set(p.i, { w: base.width, h: base.height });
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const vp = pg.getViewport({ scale: (TB_W * dpr) / Math.min(base.width, base.height) * 0.9 });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.ceil(vp.width); canvas.height = Math.ceil(vp.height);
+      await pg.render({ canvas, viewport: vp }).promise;
+      if (f.pdf !== pdf) { invalidateThumb(p.id); continue; } // 그리는 사이 문서가 바뀜
+      $("canvas", t).replaceWith(canvas);
+      const cur = S.pages.find(x => x.id === p.id) || p;
+      fitPage($(".tpage", t), f.dims.get(p.i), cur.r, TB_W - 6, TB_H - 6);
+      t._done = true;
+      drawMarksFor(cur, $(".marks", t), false);
+    } catch (e) { console.warn("썸네일을 그리지 못했습니다", e); }
+  }
+  rendering = false;
+}
+
+/* 끌어서 순서 바꾸기 */
+let dragIds = null;
+grid.addEventListener("dragstart", e => {
+  const t = e.target.closest(".thumb");
+  if (!t) return;
+  const id = t.dataset.id;
+  if (!S.sel.has(id)) { S.sel = new Set([id]); S.anchor = id; renderSel(); }
+  dragIds = new Set(S.sel);
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/x-pdf-page", id);
+  requestAnimationFrame(() => { for (const x of dragIds || []) thumbEls.get(x)?.classList.add("dragging"); });
+});
+grid.addEventListener("dragend", () => {
+  for (const t of thumbEls.values()) t.classList.remove("dragging");
+  dragIds = null; insbar.style.display = "none";
+});
+function dropTarget(e) {
+  const els = $$(".thumb", grid);
+  if (!els.length) return null;
+  let best = null;
+  for (let k = 0; k < els.length; k++) {
+    const r = els[k].getBoundingClientRect();
+    if (e.clientY >= r.top - 8 && e.clientY <= r.bottom + 8) {
+      if (e.clientX < r.left + r.width / 2) return { k, el: els[k], after: false };
+      best = { k: k + 1, el: els[k], after: true };
+    } else if (best) break;
+  }
+  if (best) return best;
+  const last = els[els.length - 1];
+  if (e.clientY > last.getBoundingClientRect().bottom) return { k: els.length, el: last, after: true };
+  return { k: 0, el: els[0], after: false };
+}
+scroller.addEventListener("dragover", e => {
+  if (!dragIds) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  const tg = dropTarget(e);
+  if (!tg) return;
+  insbar.style.display = "block";
+  insbar.style.left = (tg.after ? tg.el.offsetLeft + tg.el.offsetWidth + 4 : tg.el.offsetLeft - 8) + "px";
+  insbar.style.top = tg.el.offsetTop + 4 + "px";
+  insbar.style.height = tg.el.offsetHeight - 8 + "px";
+});
+scroller.addEventListener("drop", e => {
+  if (!dragIds) return;
+  e.preventDefault();
+  const tg = dropTarget(e);
+  const ids = dragIds;
+  insbar.style.display = "none";
+  if (tg) movePages(ids, tg.k);
+});
+
+/* 파일을 끌어다 놓기 */
+const hasFiles = e => e.dataTransfer && [...e.dataTransfer.types].includes("Files");
+let veilTimer = 0;
+window.addEventListener("dragover", e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  $("#stage").classList.add("dragfile");
+  clearTimeout(veilTimer);
+  veilTimer = setTimeout(() => $("#stage").classList.remove("dragfile"), 150);
+});
+window.addEventListener("drop", e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  $("#stage").classList.remove("dragfile");
+  addFiles(e.dataTransfer.files);
+});
+
+/* 썸네일 누르기 */
+grid.addEventListener("click", e => {
+  const t = e.target.closest(".thumb");
+  if (!t) { if (e.target === grid && S.sel.size) { S.sel.clear(); renderSel(); } return; }
+  const id = t.dataset.id;
+  if (e.target.closest(".del")) return deletePages(S.sel.has(id) && S.sel.size > 1 ? new Set(S.sel) : new Set([id]));
+  if (e.target.closest(".rot")) return rotatePages(S.sel.has(id) && S.sel.size > 1 ? new Set(S.sel) : new Set([id]));
+  selectClick(id, e);
+});
+grid.addEventListener("dblclick", e => {
+  const t = e.target.closest(".thumb");
+  if (t && !e.target.closest(".tbtns")) openViewer(t.dataset.id);
+});
+scroller.addEventListener("click", e => { if (e.target === scroller && S.sel.size) { S.sel.clear(); renderSel(); } });
+
+/* ───────────── 편집 탭 ───────────── */
+function renderEdit() {
+  const ul = $("#file-list");
+  ul.replaceChildren();
+  for (const f of S.files.values()) {
+    const cnt = S.pages.filter(p => p.f === f.id).length;
+    const li = el("li");
+    const chip = el("span", "fchip"); chip.style.setProperty("--fc", f.color);
+    const nm = el("span", "nm", f.name); nm.title = f.name;
+    li.append(chip, nm, el("span", "ct", cnt === f.n ? `${f.n}쪽` : `${cnt}/${f.n}쪽`));
+    ul.append(li);
+  }
+  $("#file-none").hidden = S.files.size > 0;
+}
+
+/* ───────────── PDF 저장(pdf-lib) ───────────── */
+async function loadForCopy(f) {
+  const bytes = f.red || f.bytes;
+  try { return await PDFLib.PDFDocument.load(bytes, { updateMetadata: false }); }
+  catch (e) {
+    // pdf-lib이 못 읽는 구조면 MuPDF로 한 번 고쳐 쓴 뒤 다시 읽는다
+    console.warn("pdf-lib으로 읽지 못해 MuPDF로 고쳐 씁니다", e);
+    const fixed = (await call("repair", { bytes })).bytes;
+    return await PDFLib.PDFDocument.load(fixed, { updateMetadata: false });
+  }
+}
+async function buildPdf(pages) {
+  const out = await PDFLib.PDFDocument.create();
+  const byFile = new Map();
+  for (const p of pages) { if (!byFile.has(p.f)) byFile.set(p.f, []); byFile.get(p.f).push(p); }
+  const copied = new Map();
+  for (const [fid, list] of byFile) {
+    const src = await loadForCopy(S.files.get(fid));
+    const cps = await out.copyPages(src, list.map(p => p.i));
+    list.forEach((p, k) => copied.set(p.id, cps[k]));
+  }
+  for (const p of pages) {
+    const pg = copied.get(p.id);
+    if (p.r) pg.setRotation(PDFLib.degrees((pg.getRotation().angle + p.r) % 360));
+    out.addPage(pg);
+  }
+  out.setProducer("PDF 업무 도구");
+  out.setCreator("PDF 업무 도구");
+  return await out.save();
+}
+function download(data, name, type) {
+  const url = URL.createObjectURL(new Blob([data], { type }));
+  const a = el("a"); a.href = url; a.download = name;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 20000);
+}
+const safeName = s => s.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").trim();
+
+// 저장 전에 알려야 할 가명 처리 상태
+function exportBlock() {
+  if (isApplied() && blockingFailures().length) return "가명 처리 검증에서 원문이 남아 있는 곳이 발견되어 저장과 복사를 막았습니다. 개인정보 탭에서 확인하세요.";
+  return null;
+}
+function exportWarning() {
+  if (P.state === "none") return P.hits.length ? "가명 처리를 적용하지 않았습니다. 원본 그대로 저장됩니다." : null;
+  if (P.state === "detected") return "탐지만 하고 아직 적용하지 않았습니다. 개인정보가 그대로 들어 있는 원본이 저장됩니다.";
+  if (P.dirty || P.cfgStale || unscannedFiles().length) return "가명 처리 적용 후에 바뀐 내용이 있습니다. 마지막으로 적용한 상태가 저장됩니다. 필요하면 개인정보 탭에서 다시 탐지·적용하세요.";
+  return null;
+}
+function maskNames(s) {
+  if (!isApplied()) return s;
+  for (const n of parseNames().sort((a, b) => b.length - a.length)) s = s.split(n).join(labelOf(n).replace(/[\[\]]/g, ""));
+  return s;
+}
+function defaultBase() {
+  const first = S.pages.length ? fileOf(S.pages[0]) : [...S.files.values()][0];
+  return maskNames(baseName(first ? first.name : "문서"));
+}
+function askName(title, base, ext, warn) {
+  return new Promise(resolve => {
+    const dlg = $("#dlg-save");
+    $("#dlg-save-title").textContent = title;
+    $("#save-name").value = base;
+    $("#save-ext").textContent = ext;
+    $("#dlg-save-warn").hidden = !warn;
+    $("#dlg-save-warn").textContent = warn ? "⚠ " + warn : "";
+    dlg.returnValue = "";
+    dlg.onclose = () => resolve(dlg.returnValue === "ok" ? safeName($("#save-name").value) || base : null);
+    $("#save-ok").value = "ok";
+    dlg.showModal();
+    $("#save-name").select();
+  });
+}
+$("#save-cancel").onclick = () => $("#dlg-save").close("");
+
+async function savePdf(onlySel) {
+  const pages = onlySel ? S.pages.filter(p => S.sel.has(p.id)) : S.pages;
+  if (!pages.length) return;
+  const block = exportBlock();
+  if (block) return toast(block, true);
+  const name = await askName(onlySel ? `선택한 ${pages.length}쪽만 저장` : `전체 ${pages.length}쪽 저장`, defaultBase() + (onlySel ? "_선택" : "_편집"), ".pdf", exportWarning());
+  if (!name) return;
+  const b = busy("PDF를 만드는 중…");
+  try {
+    const bytes = await buildPdf(pages);
+    download(bytes, name + ".pdf", "application/pdf");
+    toast(`저장했습니다: ${name}.pdf`);
+  } catch (e) { console.error(e); toast("저장하지 못했습니다: " + (e.message || e), true); }
+  b.done();
+}
+
+/* ───────────── MuPDF 워커(처음 필요할 때 불러온다) ───────────── */
+let workerP = null, callSeq = 0;
+const pending = new Map();
+function getWorker() {
+  if (workerP) return workerP;
+  const b = busy("MuPDF를 불러오는 중… (처음 한 번, 약 10MB)");
+  workerP = new Promise((resolve, reject) => {
+    const src = `const MUPDF_URL = ${JSON.stringify(abs("lib/mupdf/mupdf.js"))};\n` + $("#worker-src").textContent;
+    const w = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })), { type: "module" });
+    w.onmessage = e => {
+      const m = e.data;
+      if (m.ready) return resolve(w);
+      const p = pending.get(m.id);
+      if (!p) return;
+      if (m.progress) return p.onProgress && p.onProgress(m.progress[0], m.progress[1]);
+      pending.delete(m.id);
+      m.ok ? p.resolve(m.result) : p.reject(new Error(m.error));
+    };
+    w.onerror = e => reject(new Error("MuPDF를 불러오지 못했습니다. " + (e.message || "")));
+  });
+  workerP.then(() => b.done(), e => { b.done(); workerP = null; toast(e.message, true); });
+  return workerP;
+}
+async function call(op, args, onProgress) {
+  const w = await getWorker();
+  return new Promise((resolve, reject) => {
+    const id = ++callSeq;
+    pending.set(id, { resolve, reject, onProgress });
+    w.postMessage({ id, op, args });
+  });
+}
+async function ensureOpen(f) {
+  if (f.inWorker) return;
+  await call("open", { fileId: f.id, ver: "orig", bytes: f.bytes });
+  f.inWorker = true;
+}
+
+/* ───────────── 개인정보: 이름과 이름표 ───────────── */
+function parseNames() {
+  const out = [];
+  for (const t of $("#names").value.normalize("NFC").split(/[\n,，、;]+/)) {
+    const n = t.trim().replace(/\s+/g, " ");
+    if (n.length >= 2 && !out.includes(n)) out.push(n);
+  }
+  return out;
+}
+const alpha = i => { let s = ""; i++; while (i > 0) { i--; s = String.fromCharCode(65 + (i % 26)) + s; i = Math.floor(i / 26); } return s; };
+function labelOf(name) {
+  if (!P.labels.has(name)) P.labels.set(name, { def: `[학생${alpha(P.labelSeq++)}]`, custom: "" });
+  const l = P.labels.get(name);
+  return l.custom.trim() || l.def;
+}
+const labelFor = h => (h.type === "name" ? labelOf(h.name) : h.label);
+
+function renderNameMap() {
+  const tb = $("#map-edit");
+  const names = parseNames();
+  const keep = new Map($$("tr", tb).map(tr => [tr.dataset.name, tr]));
+  tb.replaceChildren();
+  for (const n of names) {
+    let tr = keep.get(n);
+    if (!tr) {
+      tr = el("tr"); tr.dataset.name = n;
+      const nm = el("td", "nm", n); nm.title = n;
+      const inp = el("input"); inp.type = "text"; inp.spellcheck = false; inp.autocomplete = "off";
+      inp.placeholder = (labelOf(n), P.labels.get(n).def);
+      inp.value = P.labels.get(n).custom;
+      inp.title = "이름표 바꾸기 (비워 두면 기본값)";
+      inp.oninput = () => { P.labels.get(n).custom = inp.value; onLabelChange(); };
+      const td = el("td"); td.append(inp);
+      tr.append(nm, el("td", "ar", "→"), td);
+    }
+    tb.append(tr);
+  }
+}
+function onLabelChange() {
+  if (isApplied()) P.dirty = true;
+  renderHits(); renderPiiState(); renderRestore();
+}
+function readCfg() {
+  let sid = null;
+  if ($("#opt-sid").checked) {
+    const fmt = $("#sid-fmt").value.trim();
+    const m = fmt.match(/^\/(.+)\/$/);
+    if (m) sid = m[1];
+    else if (fmt) sid = "(?<!\\d)" + [...fmt].map(ch => (ch === "#" ? "\\d" : esc(ch))).join("") + "(?!\\d)";
+    if (sid) { try { new RegExp(sid); } catch (e) { toast("학번 형식을 읽을 수 없습니다.", true); sid = null; } }
+  }
+  return {
+    names: parseNames().map(n => ({ name: n, label: labelOf(n) })),
+    variants: $("#opt-var").checked, rrn: $("#opt-rrn").checked, phone: $("#opt-phone").checked, email: $("#opt-email").checked, sid,
+  };
+}
+const presentFiles = () => [...S.files.values()].filter(f => S.pages.some(p => p.f === f.id));
+const unscannedFiles = () => presentFiles().filter(f => !P.scanned.has(f.id));
+const hitKey = h => [h.f, h.page, h.type, h.text, Math.round(h.rects[0][0]), Math.round(h.rects[0][1])].join("|");
+
+/* ───────────── 개인정보: 탐지 ───────────── */
+async function runDetect() {
+  if (P.working || !S.pages.length) return;
+  const cfg = readCfg();
+  P.working = true; renderPiiState();
+  const b = busy("개인정보를 찾는 중…");
+  try {
+    const hits = [];
+    const files = presentFiles();
+    for (const f of files) {
+      await ensureOpen(f);
+      const res = await call("detect", { fileId: f.id, ver: "orig", cfg }, (d, t) => b.set(`개인정보를 찾는 중… ${baseName(f.name)} ${d}/${t}쪽`));
+      for (const h of res.hits) {
+        h.f = f.id; h.key = hitKey(h);
+        h.checked = P.overrides.has(h.key) ? P.overrides.get(h.key) : h.variant !== "given";
+        hits.push(h);
+      }
+    }
+    P.hits = hits;
+    P.scanned = new Set(files.map(f => f.id));
+    P.cfg = cfg; P.cfgStale = false;
+    if (P.state === "none") P.state = "detected";
+    else if (isApplied()) P.dirty = true;
+    for (const f of files) for (const i of new Set(hits.filter(h => h.f === f.id).map(h => h.page))) await pageDims(f, i);
+  } catch (e) { console.error(e); toast("탐지하지 못했습니다: " + e.message, true); }
+  b.done();
+  P.working = false;
+  renderPii(); renderMarks(); renderMd();
+}
+
+/* ───────────── 개인정보: 적용과 검증 ───────────── */
+const overlap = (a, b) => {
+  const w = Math.min(a[2], b[2]) - Math.max(a[0], b[0]), h = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
+  if (w <= 0 || h <= 0) return 0;
+  return (w * h) / Math.max(1e-6, Math.min((a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1])));
+};
+const rectsHit = (A, B) => A.some(a => B.some(b => overlap(a, b) > 0.3));
+
+async function runApply() {
+  if (P.working || P.state === "none" || P.cfgStale) return;
+  P.working = true; renderPiiState();
+  const b = busy("글자 데이터를 지우는 중…");
+  const strip = $("#opt-strip").checked;
+  try {
+    const files = [...S.files.values()].filter(f => P.scanned.has(f.id));
+    for (const f of files) {
+      const items = [];
+      for (const h of P.hits) if (h.f === f.id && h.checked) items.push({ page: h.page, rects: h.rects, label: labelFor(h), kind: "text" });
+      for (const m of P.manual) if (m.f === f.id) items.push({ page: m.page, rects: [m.rect], label: m.label.trim() || "[가림]", kind: "manual" });
+      await ensureOpen(f);
+      const res = await call("redact", { fileId: f.id, items, strip }, (d, t) => b.set(`글자 데이터를 지우는 중… ${baseName(f.name)} ${d}/${t}쪽`));
+      f.red = res.bytes;
+      await reloadPdf(f);
+    }
+    // 검증: 지운 뒤의 문서에서 다시 찾아본다
+    b.set("지운 결과를 검증하는 중…");
+    const fails = [];
+    const allowed = (fid, h) => P.hits.some(u => u.f === fid && u.page === h.page && !u.checked && rectsHit(u.rects, h.rects));
+    for (const f of files) {
+      const usable = s => s.length >= 2 && !/\s/.test(s);
+      const strings = P.cfg.names.map(n => n.name).filter(usable);
+      const pageStrings = {};
+      for (const h of P.hits) if (h.f === f.id && h.checked && usable(h.text.trim())) (pageStrings[h.page] ||= new Set()).add(h.text.trim());
+      for (const k in pageStrings) pageStrings[k] = [...pageStrings[k]];
+      const areas = [];
+      for (const h of P.hits) if (h.f === f.id && h.checked) for (const r of h.rects) areas.push({ page: h.page, rect: r });
+      for (const m of P.manual) if (m.f === f.id) areas.push({ page: m.page, rect: m.rect });
+      const prog = (d, t) => b.set(`지운 결과를 검증하는 중… ${baseName(f.name)} ${d}/${t}쪽`);
+      const res = await call("verify", { fileId: f.id, cfg: P.cfg, strings, pageStrings, areas }, prog);
+      const push = (h, why) => { if (!fails.some(x => x.f === f.id && x.page === h.page && rectsHit(x.rects, h.rects))) fails.push({ f: f.id, page: h.page, text: h.text, rects: h.rects, why }); };
+      for (const h of res.hits) if (!allowed(f.id, h)) push(h, "글자가 남아 있음");
+      for (const h of res.found) if (!allowed(f.id, h)) push(h, "글자가 남아 있음");
+      for (const h of res.left) push(h, "지운 자리에 글자가 남아 있음");
+    }
+    P.failures = fails;
+    P.state = "applied"; P.dirty = false;
+    P.applied = { n: P.hits.filter(h => h.checked).length + P.manual.length, strip };
+    if (M.done) M.stale = true;
+  } catch (e) { console.error(e); toast("적용하지 못했습니다: " + e.message, true); }
+  b.done();
+  P.working = false;
+  renderPii(); renderMarks(); renderMd();
+}
+
+async function revertApply() {
+  if (P.working) return;
+  for (const f of S.files.values()) {
+    if (!f.red) continue;
+    f.red = null;
+    await reloadPdf(f);
+    call("dropRedacted", { fileId: f.id }).catch(() => {});
+  }
+  P.state = P.scanned.size ? "detected" : "none"; P.dirty = false; P.failures = [];
+  if (M.done) M.stale = true;
+  renderPii(); renderMarks(); renderMd();
+  toast("원본으로 되돌렸습니다.");
+}
+
+const posOf = (fid, i) => S.pages.findIndex(p => p.f === fid && p.i === i);
+const blockingFailures = () => P.failures.filter(x => posOf(x.f, x.page) >= 0);
+
+/* ───────────── 개인정보: 화면 ───────────── */
+function renderPii() { renderNameMap(); renderHits(); renderPiiState(); renderRestore(); }
+
+function renderPiiState() {
+  const has = S.pages.length > 0;
+  $("#btn-detect").disabled = !has || P.working;
+  $("#btn-detect").textContent = P.state === "none" ? "탐지" : "다시 탐지";
+  const un = unscannedFiles();
+  const stale = $("#pii-stale");
+  let msg = "";
+  if (P.state !== "none" && un.length) msg = `탐지하지 않은 파일이 있습니다(${un.map(f => baseName(f.name)).join(", ")}). 다시 탐지하세요.`;
+  else if (P.state !== "none" && P.cfgStale) msg = "이름이나 찾을 항목이 바뀌었습니다. 다시 탐지하세요.";
+  stale.hidden = !msg; stale.textContent = msg ? "⚠ " + msg : "";
+  $("#hits-sec").hidden = P.state === "none";
+  const shown = P.hits.filter(h => posOf(h.f, h.page) >= 0), man = P.manual.filter(m => posOf(m.f, m.page) >= 0);
+  $("#hits-count").textContent = `찾은 곳 ${shown.length + man.length}곳 · 지울 곳 ${shown.filter(h => h.checked).length + man.length}곳`;
+  $("#detect-info").textContent = P.state === "none" ? (has ? "" : "먼저 PDF를 넣으세요.") : "";
+  $("#btn-apply").disabled = P.state === "none" || P.working || !!msg;
+  $("#btn-apply").textContent = isApplied() ? "다시 적용" : "적용 (글자 데이터 삭제)";
+  $("#btn-revert").hidden = !isApplied();
+  const box = $("#apply-result");
+  box.replaceChildren();
+  if (isApplied()) {
+    const fails = blockingFailures();
+    if (fails.length) {
+      const n = el("div", "note bad");
+      n.append(el("b", "", `검증 실패: ${fails.length}곳에 원문이 남아 있습니다.`), document.createTextNode(" 저장과 복사를 막았습니다. 아래 위치를 눌러 확인한 뒤, 크게 보기에서 영역을 직접 그려 다시 적용하세요." + (P.applied.strip ? "" : " 주석이나 양식 칸에 든 글자라면 ‘문서 부속 정보 제거’를 켜고 다시 적용하면 지워집니다.")));
+      const ul = el("ul"); ul.id = "fails";
+      for (const x of fails) {
+        const li = el("li", "", `p.${posOf(x.f, x.page) + 1} «${x.text}» — ${x.why}`);
+        li.onclick = () => openViewerAt(x.f, x.page, x.rects);
+        ul.append(li);
+      }
+      n.append(ul);
+      box.append(n);
+    } else if (P.dirty) {
+      box.append(el("div", "note warn", "⚠ 적용한 뒤에 바뀐 내용이 있습니다. ‘다시 적용’을 눌러야 반영됩니다."));
+    } else {
+      const n = el("div", "note ok");
+      n.append(el("b", "", "검증 통과."), document.createTextNode(` ${P.applied.n}곳의 글자 데이터를 지웠고, 다시 추출해 보아도 원래 문자열이 나오지 않습니다.` + (P.applied.strip ? " 문서 부속 정보도 지웠습니다." : "") + " 이제 PDF로 저장하거나 Markdown 탭에서 복사하세요."));
+      box.append(n);
+    }
+  }
+}
+
+const VARIANT = { spaced: "띄어 씀", given: "이름만", wrapped: "줄 바뀜" };
+function renderHits() {
+  // 목록이 길 수 있으니 개인정보 탭이 보일 때만 다시 그린다
+  if (S.tab !== "pii") { P.listStale = true; return; }
+  P.listStale = false;
+  const box = $("#hits");
+  box.replaceChildren();
+  const rows = [];
+  for (const h of P.hits) { const pos = posOf(h.f, h.page); if (pos >= 0) rows.push({ pos, y: h.rects[0][1], h }); }
+  for (const m of P.manual) { const pos = posOf(m.f, m.page); if (pos >= 0) rows.push({ pos, y: m.rect[1], m }); }
+  rows.sort((a, b) => a.pos - b.pos || a.y - b.y);
+  let last = -1;
+  for (const r of rows) {
+    if (r.pos !== last) { last = r.pos; const p = S.pages[r.pos]; box.append(el("div", "hgroup", `p.${r.pos + 1} · ${baseName(fileOf(p).name)} ${p.i + 1}쪽`)); }
+    const row = el("div", "hit");
+    if (r.h) {
+      const h = r.h;
+      row.classList.toggle("off", !h.checked);
+      h._row = row;
+      const cb = el("input"); cb.type = "checkbox"; cb.checked = h.checked; cb.title = "체크한 곳만 지웁니다";
+      cb.onchange = () => { setChecked(h, cb.checked); };
+      const ctx = el("span", "ctx");
+      ctx.innerHTML = `${html(h.before)}<mark>${html(h.text)}</mark>${html(h.after)}`;
+      ctx.title = "눌러서 크게 보기";
+      ctx.onclick = () => openViewerAt(h.f, h.page, h.rects);
+      row.append(cb, ctx);
+      if (h.variant) row.append(el("span", "vr", VARIANT[h.variant]));
+      row.append(el("span", "lb", labelFor(h)));
+    } else {
+      const m = r.m;
+      const ctx = el("span", "ctx", "직접 그린 영역");
+      ctx.onclick = () => openViewerAt(m.f, m.page, [m.rect]);
+      const inp = el("input"); inp.type = "text"; inp.value = m.label; inp.spellcheck = false; inp.title = "이 영역에 붙일 이름표";
+      inp.oninput = () => { m.label = inp.value; if (isApplied()) { P.dirty = true; renderPiiState(); } };
+      const x = el("button", "x small", "✕"); x.title = "이 영역 빼기";
+      x.onclick = () => removeManual(m);
+      row.append(el("span", "vr", "영역"), ctx, inp, x);
+    }
+    box.append(row);
+  }
+  if (P.state !== "none" && !rows.length) box.append(el("div", "hit", "찾은 곳이 없습니다."));
+}
+function setChecked(h, v) {
+  h.checked = v;
+  P.overrides.set(h.key, v);
+  const wasDirty = P.dirty;
+  if (isApplied()) P.dirty = true;
+  // 그 줄과 그 페이지의 표시만 고친다
+  if (h._row && h._row.isConnected) { h._row.classList.toggle("off", !v); $("input[type=checkbox]", h._row).checked = v; }
+  else renderHits();
+  renderPiiState(); renderMd();
+  if (P.dirty !== wasDirty) renderMarks();
+  else { const p = S.pages[posOf(h.f, h.page)], t = p && thumbEls.get(p.id); if (t) drawMarksFor(p, $(".marks", t), false); }
+  if (viewer.open) drawViewerMarks();
+}
+function removeManual(m) {
+  P.manual = P.manual.filter(x => x !== m);
+  if (isApplied()) P.dirty = true;
+  renderHits(); renderPiiState(); renderMarks(); renderMd();
+  if (viewer.open) drawViewerMarks();
+}
+
+/* 노란 표시 */
+let hitIndex = null, hitIndexOf = null;
+function hitsOn(fid, i) {
+  if (hitIndexOf !== P.hits) {
+    hitIndex = new Map(); hitIndexOf = P.hits;
+    for (const h of P.hits) { const k = h.f + "|" + h.page; if (!hitIndex.has(k)) hitIndex.set(k, []); hitIndex.get(k).push(h); }
+  }
+  return hitIndex.get(fid + "|" + i) || [];
+}
+function drawMarksFor(p, box, interactive, focusRects) {
+  const f = fileOf(p), d = f.dims.get(p.i);
+  box.replaceChildren();
+  if (!d) return;
+  const showHits = !isApplied() || P.dirty;
+  const add = (r, cls) => {
+    const m = el("i", "mk " + cls);
+    m.style.left = (r[0] / d.w * 100) + "%"; m.style.top = (r[1] / d.h * 100) + "%";
+    m.style.width = ((r[2] - r[0]) / d.w * 100) + "%"; m.style.height = ((r[3] - r[1]) / d.h * 100) + "%";
+    box.append(m);
+    return m;
+  };
+  if (showHits) {
+    for (const h of hitsOn(p.f, p.i)) {
+      for (const r of h.rects) {
+        const m = add(r, h.checked ? "on" : "off");
+        if (interactive) { m.title = `${h.text} → ${labelFor(h)} (눌러서 ${h.checked ? "해제" : "체크"})`; m.onclick = e => { e.stopPropagation(); setChecked(h, !h.checked); }; }
+        if (focusRects && rectsHit(focusRects, [r])) m.classList.add("focus");
+      }
+    }
+    for (const mm of P.manual) {
+      if (mm.f !== p.f || mm.page !== p.i) continue;
+      const m = add(mm.rect, "man");
+      if (interactive) {
+        const x = el("button", "del", "✕"); x.title = "이 영역 빼기";
+        x.onclick = e => { e.stopPropagation(); removeManual(mm); };
+        x.onmousedown = e => e.stopPropagation();
+        m.append(x);
+        m.onmousedown = e => e.stopPropagation();
+      }
+    }
+  }
+  if (isApplied()) for (const x of P.failures) {
+    if (x.f !== p.f || x.page !== p.i) continue;
+    for (const r of x.rects) add(r, "fail");
+  }
+}
+function renderMarks() {
+  for (const p of S.pages) {
+    const t = thumbEls.get(p.id);
+    if (t && t._done) drawMarksFor(p, $(".marks", t), false); // 아직 안 그린 썸네일은 그릴 때 함께 표시한다
+  }
+}
+
+/* ───────────── 크게 보기 ───────────── */
+const viewer = $("#viewer");
+const V = { id: null, zoom: 1, token: 0, scale: 1, focus: null };
+
+function openViewer(id, focus) {
+  V.id = id; V.focus = focus || null;
+  if (!viewer.open) { V.zoom = 1; viewer.showModal(); }
+  drawViewer();
+}
+function openViewerAt(fid, i, rects) {
+  const pos = posOf(fid, i);
+  if (pos < 0) return;
+  const p = S.pages[pos];
+  const t = thumbEls.get(p.id);
+  if (t) { t.scrollIntoView({ block: "center" }); t.classList.remove("flash"); void t.offsetWidth; t.classList.add("flash"); }
+  openViewer(p.id, rects);
+}
+async function drawViewer() {
+  const pos = S.pages.findIndex(p => p.id === V.id);
+  if (pos < 0) return viewer.close();
+  const p = S.pages[pos], f = fileOf(p);
+  const token = ++V.token;
+  $("#v-title").textContent = `${pos + 1} / ${S.pages.length} · ${baseName(f.name)} ${p.i + 1}쪽`;
+  $("#v-prev").disabled = pos === 0;
+  $("#v-next").disabled = pos === S.pages.length - 1;
+  const pg = await f.pdf.getPage(p.i + 1);
+  const d = await pageDims(f, p.i);
+  if (token !== V.token) return;
+  const sc = $("#vscroll");
+  const rw = p.r % 180 ? d.h : d.w, rh = p.r % 180 ? d.w : d.h;
+  const fit = Math.min((sc.clientWidth - 48) / rw, 2.2);
+  const s = Math.max(0.2, fit * V.zoom);
+  V.scale = s; V.dims = d; V.r = p.r;
+  const frame = $("#vframe"), page = $("#vpage");
+  frame.style.width = rw * s + "px"; frame.style.height = rh * s + "px";
+  page.style.width = d.w * s + "px"; page.style.height = d.h * s + "px";
+  page.style.transform = `translate(-50%, -50%) rotate(${p.r}deg)`;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const vp = pg.getViewport({ scale: Math.min(s * dpr, 5) });
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.ceil(vp.width); canvas.height = Math.ceil(vp.height);
+  await pg.render({ canvas, viewport: vp }).promise;
+  if (token !== V.token) return;
+  $("canvas", page).replaceWith(canvas);
+  drawViewerMarks();
+}
+function drawViewerMarks() {
+  const p = S.pages.find(x => x.id === V.id);
+  if (p) drawMarksFor(p, $("#vmarks"), true, V.focus);
+}
+function viewerStep(d) {
+  const pos = S.pages.findIndex(p => p.id === V.id) + d;
+  if (pos < 0 || pos >= S.pages.length) return;
+  V.id = S.pages[pos].id; V.focus = null;
+  $("#vscroll").scrollTop = 0;
+  drawViewer();
+}
+$("#v-prev").onclick = () => viewerStep(-1);
+$("#v-next").onclick = () => viewerStep(1);
+$("#v-zin").onclick = () => { V.zoom = Math.min(4, V.zoom * 1.25); drawViewer(); };
+$("#v-zout").onclick = () => { V.zoom = Math.max(0.3, V.zoom / 1.25); drawViewer(); };
+$("#v-close").onclick = () => viewer.close();
+viewer.addEventListener("keydown", e => {
+  if (e.target.matches("input, textarea")) return;
+  if (e.key === "ArrowLeft") viewerStep(-1);
+  else if (e.key === "ArrowRight") viewerStep(1);
+});
+
+// 화면 위치 → 페이지 좌표(회전 고려)
+function viewerPoint(e) {
+  const b = $("#vframe").getBoundingClientRect();
+  const u = (e.clientX - b.left) / V.scale, v = (e.clientY - b.top) / V.scale;
+  const { w, h } = V.dims;
+  let x = u, y = v;
+  if (V.r === 90) { x = v; y = h - u; }
+  else if (V.r === 180) { x = w - u; y = h - v; }
+  else if (V.r === 270) { x = w - v; y = u; }
+  return [Math.max(0, Math.min(w, x)), Math.max(0, Math.min(h, y))];
+}
+let rubber = null;
+$("#vpage").addEventListener("mousedown", e => {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  rubber = { a: viewerPoint(e), b: null };
+});
+window.addEventListener("mousemove", e => {
+  if (!rubber) return;
+  rubber.b = viewerPoint(e);
+  const r = $("#vrubber"), s = V.scale;
+  const x0 = Math.min(rubber.a[0], rubber.b[0]), y0 = Math.min(rubber.a[1], rubber.b[1]);
+  r.style.display = "block";
+  r.style.left = x0 * s + "px"; r.style.top = y0 * s + "px";
+  r.style.width = Math.abs(rubber.a[0] - rubber.b[0]) * s + "px"; r.style.height = Math.abs(rubber.a[1] - rubber.b[1]) * s + "px";
+});
+window.addEventListener("mouseup", () => {
+  if (!rubber) return;
+  const { a, b } = rubber;
+  rubber = null;
+  $("#vrubber").style.display = "none";
+  if (!b) return;
+  const rect = [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
+  if (rect[2] - rect[0] < 4 || rect[3] - rect[1] < 4) return;
+  const p = S.pages.find(x => x.id === V.id);
+  if (!p) return;
+  P.manual.push({ f: p.f, page: p.i, rect, label: "[가림]" });
+  if (isApplied()) P.dirty = true;
+  renderHits(); renderPiiState(); renderMarks(); renderMd(); drawViewerMarks();
+  // 탐지 전에 영역부터 그렸으면 탐지를 한 번 돌려 둔다(적용과 검증에 필요)
+  if (P.state === "none") runDetect().then(() => { if (viewer.open) drawViewerMarks(); });
+  toast("지울 영역을 추가했습니다. 개인정보 탭에서 ‘적용’을 누르면 지워집니다.");
+});
+
+/* ───────────── Markdown ───────────── */
+function mdWarning() {
+  if (!S.pages.length) return "";
+  if (isApplied() && blockingFailures().length) return "가명 처리 검증에 실패한 곳이 있어 복사와 저장을 막았습니다. 개인정보 탭에서 확인하세요.";
+  if (!isApplied()) return "가명 처리 전입니다. 개인정보가 그대로 들어갑니다. 개인정보 탭에서 탐지·적용한 뒤 변환하세요.";
+  if (P.dirty || P.cfgStale || unscannedFiles().length) return "가명 처리 후에 바뀐 내용이 있습니다. 개인정보 탭에서 다시 탐지·적용해야 반영됩니다.";
+  return "";
+}
+function renderMd() {
+  const w = mdWarning();
+  $("#md-warn").hidden = !w;
+  $("#md-warn").textContent = w ? "⚠ " + w : "";
+  $("#btn-md").disabled = !S.pages.length || M.working;
+  $("#btn-md").textContent = M.done ? "다시 변환" : "변환";
+  $("#md-info").textContent = M.done && M.stale ? "문서가 바뀌었습니다. 다시 변환하세요." : "";
+  const txt = $("#md-text").value;
+  $("#md-count").textContent = `${[...txt].length.toLocaleString("ko-KR")}자`;
+  const blocked = !!exportBlock();
+  $("#btn-md-copy").disabled = $("#btn-md-save").disabled = !txt || blocked;
+}
+async function runMarkdown() {
+  if (M.working || !S.pages.length) return;
+  if (M.done && M.edited && !confirm("직접 고친 내용이 있습니다. 다시 변환하면 지워집니다. 계속할까요?")) return;
+  M.working = true; renderMd();
+  const b = busy("Markdown으로 바꾸는 중…");
+  try {
+    const opts = { noSpace: $("#md-nospace").checked };
+    const applied = isApplied();
+    const byFile = new Map();
+    for (const p of S.pages) { if (!byFile.has(p.f)) byFile.set(p.f, []); byFile.get(p.f).push(p.i); }
+    const res = new Map();
+    for (const [fid, idxs] of byFile) {
+      const f = S.files.get(fid);
+      await ensureOpen(f);
+      const ver = applied && f.red ? "red" : "orig";
+      res.set(fid, (await call("markdown", { fileId: fid, ver, pages: idxs, opts }, (d, t) => b.set(`Markdown으로 바꾸는 중… ${baseName(f.name)} ${d}/${t}쪽`))).pages);
+    }
+    const parts = [];
+    if (applied && $("#md-notice").checked) {
+      const used = P.hits.filter(h => h.checked);
+      const first = used.find(h => h.type === "name") || used[0];
+      const lb = first ? labelFor(first) : (P.manual[0] ? P.manual[0].label : "");
+      if (lb) parts.push(`이 문서의 ${lb} 등은 가명 처리한 ${first && first.type === "name" ? "이름" : "표시"}입니다.`);
+    }
+    const multi = byFile.size > 1;
+    let lastF = null;
+    S.pages.forEach((p, k) => {
+      if (multi && p.f !== lastF) parts.push("# " + maskNames(baseName(fileOf(p).name)));
+      lastF = p.f;
+      const body = res.get(p.f)[p.i];
+      parts.push("<" + `!-- p.${k + 1} --` + ">");
+      parts.push(body == null || body === "" ? `⚠ p.${k + 1}: 글자 없음(스캔본일 수 있음)` : body);
+    });
+    $("#md-text").value = parts.join("\n\n") + "\n";
+    M.done = true; M.stale = false; M.edited = false;
+  } catch (e) { console.error(e); toast("변환하지 못했습니다: " + e.message, true); }
+  b.done();
+  M.working = false;
+  renderMd();
+}
+async function copyText(text, okMsg) {
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) {
+    const ta = el("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.append(ta); ta.select(); document.execCommand("copy"); ta.remove();
+  }
+  toast(okMsg);
+}
+
+/* ───────────── 되돌리기 ───────────── */
+function nameMap() {
+  return parseNames().map(n => ({ name: n, label: labelOf(n) }));
+}
+function labelPattern(label) {
+  const core = label.trim().replace(/^[\[\(（【<〔［\\]+/, "").replace(/[\]\)）】>〕］\\]+$/, "").trim();
+  if (!core) return null;
+  const body = [...core].filter(ch => !/\s/.test(ch)).map(esc).join("\\s*");
+  const head = /^[A-Za-z0-9]/.test(core) ? "(?<![A-Za-z0-9])" : "";
+  const tail = /[A-Za-z0-9]$/.test(core) ? "(?![A-Za-z0-9])" : "";
+  return { core, src: `(?:\\\\?[\\[［【〔]\\s*${body}\\s*\\\\?[\\]］】〕]|${head}${body}${tail})` };
+}
+const JOSA = [["은", "는"], ["이", "가"], ["을", "를"], ["과", "와"], ["으로", "로"], ["아", "야"]];
+function fixJosa(name, j) {
+  const c = name.charCodeAt(name.length - 1);
+  if (c < 0xac00 || c > 0xd7a3) return j;
+  const jong = (c - 0xac00) % 28;
+  for (const [a, b] of JOSA) {
+    if (j !== a && j !== b) continue;
+    if (a === "으로") return jong && jong !== 8 ? a : b;
+    return jong ? a : b;
+  }
+  return j;
+}
+function restoreText(text) {
+  const josa = $("#rs-josa").checked;
+  let count = 0;
+  const maps = nameMap().map(m => ({ ...m, pat: labelPattern(m.label) })).filter(m => m.pat).sort((a, b) => b.pat.core.length - a.pat.core.length);
+  // 이름 하나씩 차례로 바꾸되, 이미 바꾼 자리는 다시 건드리지 않도록 조각으로 나눠 둔다
+  let segs = [{ t: text, done: false }];
+  for (const m of maps) {
+    // 이름표 뒤에 닫는 괄호·따옴표·굵게 표시가 끼어 있어도 조사를 맞춘다
+    const re = new RegExp(m.pat.src + "((?:\\*\\*|[)）\\]】”’\"'*_])*)(?:(으로|은|는|이|가|을|를|과|와|로|아|야)(?![가-힣]))?", "g");
+    const next = [];
+    for (const s of segs) {
+      if (s.done) { next.push(s); continue; }
+      let last = 0, x;
+      re.lastIndex = 0;
+      while ((x = re.exec(s.t))) {
+        if (x.index > last) next.push({ t: s.t.slice(last, x.index), done: false });
+        next.push({ t: m.name + (x[1] || "") + (x[2] ? (josa ? fixJosa(m.name, x[2]) : x[2]) : ""), done: true });
+        last = x.index + x[0].length; count++;
+        if (!x[0].length) re.lastIndex++;
+      }
+      if (last < s.t.length) next.push({ t: s.t.slice(last), done: false });
+    }
+    segs = next;
+  }
+  return { text: segs.map(s => s.t).join(""), count };
+}
+function renderRestore() {
+  const maps = nameMap();
+  const box = $("#rs-map");
+  box.replaceChildren();
+  if (!maps.length) box.textContent = "대응표가 비어 있습니다. 개인정보 탭에서 이름을 입력하면 여기에 나타납니다.";
+  else {
+    box.append(el("b", "", "대응표 "));
+    box.append(document.createTextNode(maps.map(m => `${m.label} → ${m.name}`).join("  ·  ")));
+  }
+  const src = $("#rs-in").value;
+  if (!src) { $("#rs-out").value = ""; $("#rs-count").textContent = ""; $("#btn-rs-copy").disabled = true; return; }
+  const r = restoreText(src);
+  $("#rs-out").value = r.text;
+  $("#rs-count").textContent = `${r.count}곳을 실제 이름으로 바꿨습니다.`;
+  $("#btn-rs-copy").disabled = false;
+}
+
+/* ───────────── 탭과 버튼 ───────────── */
+function setTab(name) {
+  S.tab = name;
+  for (const t of $$(".tab")) t.setAttribute("aria-selected", t.dataset.tab === name);
+  for (const p of $$(".pane")) p.classList.toggle("on", p.id === "pane-" + name);
+  if (name === "pii" || name === "md") getWorker().catch(() => {});
+  if (name === "pii" && P.listStale) renderHits();
+  if (name === "md") { renderMd(); if (!M.done && S.pages.length) runMarkdown(); }
+  if (name === "rs") renderRestore();
+}
+for (const t of $$(".tab")) t.onclick = () => setTab(t.dataset.tab);
+
+$("#btn-add").onclick = $("#btn-add2").onclick = () => $("#file-input").click();
+$("#file-input").onchange = e => { addFiles(e.target.files); e.target.value = ""; };
+$("#btn-undo").onclick = undo;
+$("#btn-redo").onclick = redo;
+$("#btn-save-all").onclick = () => savePdf(false);
+$("#btn-save-sel").onclick = () => savePdf(true);
+$("#btn-rot-sel").onclick = () => rotatePages(new Set(S.sel));
+$("#btn-del-sel").onclick = () => deletePages(new Set(S.sel));
+$("#btn-sel-all").onclick = () => { S.sel = new Set(S.pages.map(p => p.id)); renderSel(); };
+$("#btn-sel-none").onclick = () => { S.sel.clear(); renderSel(); };
+
+$("#names").oninput = () => { if (P.state !== "none") P.cfgStale = true; renderNameMap(); renderPiiState(); renderRestore(); renderMd(); };
+for (const id of ["opt-rrn", "opt-phone", "opt-email", "opt-sid", "opt-var", "sid-fmt"]) $("#" + id).addEventListener("input", () => { if (P.state !== "none") { P.cfgStale = true; renderPiiState(); renderMd(); } });
+$("#opt-strip").onchange = () => { if (isApplied()) { P.dirty = true; renderPiiState(); renderMd(); } };
+$("#btn-detect").onclick = runDetect;
+$("#btn-apply").onclick = runApply;
+$("#btn-revert").onclick = revertApply;
+$("#btn-chk-all").onclick = () => { for (const h of P.hits) if (posOf(h.f, h.page) >= 0) { h.checked = true; P.overrides.set(h.key, true); } if (isApplied()) P.dirty = true; renderHits(); renderPiiState(); renderMarks(); renderMd(); };
+$("#btn-chk-none").onclick = () => { for (const h of P.hits) if (posOf(h.f, h.page) >= 0) { h.checked = false; P.overrides.set(h.key, false); } if (isApplied()) P.dirty = true; renderHits(); renderPiiState(); renderMarks(); renderMd(); };
+
+$("#btn-md").onclick = runMarkdown;
+$("#md-text").oninput = () => { M.edited = true; renderMd(); };
+$("#btn-md-copy").onclick = () => { const b = exportBlock(); if (b) return toast(b, true); copyText($("#md-text").value, "Markdown을 복사했습니다."); };
+$("#btn-md-save").onclick = async () => {
+  const b = exportBlock(); if (b) return toast(b, true);
+  const name = await askName("Markdown 저장", defaultBase(), ".md", mdWarning() || null);
+  if (name) { download($("#md-text").value, name + ".md", "text/markdown;charset=utf-8"); toast(`저장했습니다: ${name}.md`); }
+};
+$("#rs-in").oninput = renderRestore;
+$("#rs-josa").onchange = renderRestore;
+$("#btn-rs-copy").onclick = () => copyText($("#rs-out").value, "실제 이름으로 바꾼 글을 복사했습니다.");
+
+/* 단축키 */
+window.addEventListener("keydown", e => {
+  if (document.querySelector("dialog[open]")) return;
+  if (e.target.matches("textarea, select, input:not([type=checkbox]):not([type=file])")) return;
+  const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+  if (mod && k === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+  else if (mod && k === "y") { e.preventDefault(); redo(); }
+  else if (mod && k === "a") { if (S.pages.length) { e.preventDefault(); S.sel = new Set(S.pages.map(p => p.id)); renderSel(); } }
+  else if (e.key === "Delete" || (e.key === "Backspace" && e.metaKey)) { if (S.sel.size) { e.preventDefault(); deletePages(new Set(S.sel)); } }
+  else if (e.key === "Escape") { if (S.sel.size) { S.sel.clear(); renderSel(); } }
+});
+
+// 작업 중에 실수로 닫는 것을 막는다(대응표와 파일은 어디에도 저장하지 않으므로 닫으면 사라진다)
+window.addEventListener("beforeunload", e => { if (S.files.size || parseNames().length) { e.preventDefault(); e.returnValue = ""; } });
+
+renderGrid(); renderEdit(); renderPii(); renderMd();
+</script>
+</body>
+</html>
