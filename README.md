@@ -9,8 +9,9 @@
 ```
 index.html      도구 목록 페이지 (임시. 허브 디자인은 따로 정할 예정)
 icon.svg        메인 아이콘(망치). 브라우저 탭과 목록 페이지 제목에 씀
-vercel.json     Vercel 배포 설정 (/pdf 와 /pdf/ 둘 다 열리게 함)
+vercel.json     Vercel 배포 설정 (/pdf 와 /pdf/ 둘 다 열리게 함, /gif 에 멀티스레드용 헤더)
 pdf/            PDF 업무 도구
+gif/            움짤 메이커
 ```
 
 ## 도구 목록
@@ -18,8 +19,7 @@ pdf/            PDF 업무 도구
 | 폴더 | 도구 | 설명 |
 | --- | --- | --- |
 | [`/pdf`](pdf/) | PDF 업무 도구 | PDF 합치기·페이지 삭제·순서·회전, 개인정보 가명 처리, Markdown 변환. 자세한 내용은 [`pdf/README.md`](pdf/README.md) |
-
-움짤 메이커(`/gif`)는 만드는 중이며, 완성되면 같은 방식으로 추가합니다.
+| [`/gif`](gif/) | 움짤 메이커 | 웹앱 화면을 녹화해 기능별 GIF로 자르고, 목표 용량에 맞춰 저장. 자세한 내용은 [`gif/README.md`](gif/README.md) |
 
 ## 배포와 실행
 
@@ -40,3 +40,5 @@ npx serve
 ## 라이선스
 
 `pdf/`는 MuPDF(AGPL-3.0)를 포함하므로 GNU AGPL-3.0 조건을 따릅니다([`pdf/LICENSE`](pdf/LICENSE)). 이 저장소가 그 소스입니다.
+
+`gif/`는 ffmpeg.wasm core(GPL-2.0-or-later)를 포함하므로 GNU GPL 조건을 따릅니다([`gif/LICENSE`](gif/LICENSE)).
