@@ -130,6 +130,7 @@ table.keys td { padding: 3px 10px 3px 0; vertical-align: top; }
 .files li { display: flex; align-items: center; gap: 7px; font-size: 13px; }
 .files .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .files .ct { color: var(--ink2); font-variant-numeric: tabular-nums; }
+.files .mv { flex: none; width: 24px; height: 22px; padding: 0; font-size: 10px; line-height: 1; }
 
 /* 대응표 */
 .maptbl { width: 100%; border-collapse: collapse; }
@@ -271,14 +272,20 @@ dialog::backdrop { background: rgba(20, 25, 38, .5); }
         </div>
       </div>
       <div class="sec">
-        <h3>넣은 파일</h3>
+        <div class="row" style="flex-wrap:nowrap">
+          <h3 style="margin:0">넣은 파일</h3>
+          <span class="grow"></span>
+          <button class="small" id="btn-sort-name" disabled title="파일 이름의 ㄱㄴㄷ(가나다) 순서로 파일을 다시 늘어놓습니다">이름순 정렬 (ㄱㄴㄷ)</button>
+        </div>
         <ul class="files" id="file-list"></ul>
         <div id="file-none" class="hint">아직 넣은 파일이 없습니다.</div>
+        <div id="file-hint" class="hint" hidden>▲▼로 파일 순서를 바꿉니다. 한꺼번에 넣은 파일은 이름순으로 들어갑니다.</div>
       </div>
       <div class="sec">
         <h3>사용법</h3>
         <table class="keys">
           <tr><td>순서 바꾸기</td><td>썸네일을 끌어서 옮기기 (다른 파일 사이로도 가능)</td></tr>
+          <tr><td>파일 순서</td><td>‘이름순 정렬’ 또는 파일 이름 옆 ▲▼</td></tr>
           <tr><td>여러 장 선택</td><td><span class="kbd">Shift</span>+클릭 범위, <span class="kbd">Ctrl</span>+클릭 하나씩</td></tr>
           <tr><td>삭제</td><td><span class="kbd">Delete</span> 또는 썸네일의 ✕</td></tr>
           <tr><td>회전</td><td>썸네일의 ↻ (90°씩)</td></tr>
@@ -1459,6 +1466,7 @@ const abs = p => new URL(p, location.href).href;
 const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const html = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const nameCmp = new Intl.Collator("ko", { numeric: true, sensitivity: "base" }).compare; // ㄱㄴㄷ 순, 숫자는 크기대로(2 < 10)
 const FILE_COLORS = ["#2f6fed", "#e0662b", "#1a9b6c", "#b0499b", "#c79a00", "#3aa5c9", "#d2475a", "#6a6fd6", "#5f7a2a", "#8b5e3c"];
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = abs("lib/pdfjs/pdf.worker.min.mjs");
@@ -1502,7 +1510,8 @@ const isApplied = () => P.state === "applied";
 
 /* ───────────── 파일 넣기 ───────────── */
 async function addFiles(list) {
-  const picked = [...list].filter(f => /\.pdf$/i.test(f.name) || f.type === "application/pdf");
+  // 한꺼번에 고른 파일은 이름순(ㄱㄴㄷ)으로 넣는다. 파일 선택 창이 넘겨주는 순서는 고른 순서와 다를 때가 많다.
+  const picked = [...list].filter(f => /\.pdf$/i.test(f.name) || f.type === "application/pdf").sort((a, b) => nameCmp(a.name, b.name));
   if (!picked.length) { if (list.length) toast("PDF 파일만 넣을 수 있습니다.", true); return; }
   const b = busy("파일을 여는 중…");
   const added = [];
@@ -1815,18 +1824,56 @@ grid.addEventListener("dblclick", e => {
 scroller.addEventListener("click", e => { if (e.target === scroller && S.sel.size) { S.sel.clear(); renderSel(); } });
 
 /* ───────────── 편집 탭 ───────────── */
+// 파일 순서: 지금 격자에서 각 파일이 처음 나오는 순서
+function fileOrder() {
+  const order = [];
+  for (const p of S.pages) if (!order.includes(p.f)) order.push(p.f);
+  return order;
+}
+// 파일 단위로 다시 늘어놓는다. 파일 안의 쪽 순서는 지금 그대로 둔다.
+function regroupFiles(order) {
+  const pages = [];
+  for (const fid of order) for (const p of S.pages) if (p.f === fid) pages.push(p);
+  if (pages.every((p, k) => p === S.pages[k])) return false;
+  commit(pages, true);
+  return true;
+}
+function sortFilesByName() {
+  const order = fileOrder().sort((a, b) => nameCmp(S.files.get(a).name, S.files.get(b).name));
+  toast(regroupFiles(order) ? "파일 이름순으로 정렬했습니다. (Ctrl+Z로 되돌릴 수 있습니다)" : "이미 이름순입니다.");
+}
+function moveFile(fid, d) {
+  const order = fileOrder();
+  const i = order.indexOf(fid), j = i + d;
+  if (i < 0 || j < 0 || j >= order.length) return;
+  [order[i], order[j]] = [order[j], order[i]];
+  regroupFiles(order);
+}
 function renderEdit() {
   const ul = $("#file-list");
   ul.replaceChildren();
-  for (const f of S.files.values()) {
+  const order = fileOrder();
+  const gone = [...S.files.keys()].filter(id => !order.includes(id)); // 쪽을 모두 지운 파일은 맨 아래
+  for (const fid of [...order, ...gone]) {
+    const f = S.files.get(fid);
+    const pos = order.indexOf(fid);
     const cnt = S.pages.filter(p => p.f === f.id).length;
     const li = el("li");
     const chip = el("span", "fchip"); chip.style.setProperty("--fc", f.color);
     const nm = el("span", "nm", f.name); nm.title = f.name;
     li.append(chip, nm, el("span", "ct", cnt === f.n ? `${f.n}쪽` : `${cnt}/${f.n}쪽`));
+    if (pos >= 0 && order.length > 1) {
+      const up = el("button", "mv small", "▲"); up.title = "이 파일을 앞으로"; up.disabled = pos === 0;
+      const down = el("button", "mv small", "▼"); down.title = "이 파일을 뒤로"; down.disabled = pos === order.length - 1;
+      up.onclick = () => moveFile(fid, -1);
+      down.onclick = () => moveFile(fid, 1);
+      li.append(up, down);
+    }
     ul.append(li);
   }
   $("#file-none").hidden = S.files.size > 0;
+  $("#file-hint").hidden = order.length < 2;
+  $("#btn-sort-name").disabled = order.length < 2;
 }
 
 /* ───────────── PDF 저장(pdf-lib) ───────────── */
@@ -2548,6 +2595,7 @@ $("#btn-rot-sel").onclick = () => rotatePages(new Set(S.sel));
 $("#btn-del-sel").onclick = () => deletePages(new Set(S.sel));
 $("#btn-sel-all").onclick = () => { S.sel = new Set(S.pages.map(p => p.id)); renderSel(); };
 $("#btn-sel-none").onclick = () => { S.sel.clear(); renderSel(); };
+$("#btn-sort-name").onclick = sortFilesByName;
 
 $("#names").oninput = () => { if (P.state !== "none") P.cfgStale = true; renderNameMap(); renderPiiState(); renderRestore(); renderMd(); };
 for (const id of ["opt-rrn", "opt-phone", "opt-email", "opt-sid", "opt-var", "sid-fmt"]) $("#" + id).addEventListener("input", () => { if (P.state !== "none") { P.cfgStale = true; renderPiiState(); renderMd(); } });
