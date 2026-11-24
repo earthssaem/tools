@@ -53,6 +53,18 @@ header {
   background: var(--panel); border-bottom: 1px solid var(--line);
 }
 header h1 { font-size: 16px; margin: 0 10px 0 2px; font-weight: 700; letter-spacing: -.2px; white-space: nowrap; }
+/* 도구 목록(연경쌤의 업무 도구함)으로 돌아가는 링크 */
+a.hub {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 5px; white-space: nowrap;
+  border: 1px solid var(--line); border-radius: 6px; color: var(--ink2); text-decoration: none; font-size: 13px;
+}
+a.hub img { width: 22px; height: 22px; border-radius: 5px; display: block; }
+a.hub:hover { background: #f6f7f9; border-color: #c9ced8; color: var(--ink); }
+a.hub:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* 제목을 누르면 처음 화면으로 */
+a.brand { color: inherit; text-decoration: none; border-radius: 8px; margin: -4px 0; padding: 4px 0; -webkit-tap-highlight-color: transparent; }
+@media (hover: hover) { a.brand:hover h1 { color: var(--accent); } }   /* 터치 화면에서는 누른 뒤 색이 남지 않게 */
+a.brand:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .local-note {
   margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--ok); background: var(--ok-bg);
   border-radius: 999px; padding: 4px 11px; font-size: 12.5px; font-weight: 600; white-space: nowrap;
@@ -209,7 +221,8 @@ dialog::backdrop { background: rgba(20, 25, 38, .5); }
 <body>
 
 <header>
-  <h1>PDF 업무 도구</h1>
+  <a class="hub" href="../" title="연경쌤의 업무 도구함으로 돌아가기"><img src="../icon.svg" alt="">도구함</a>
+  <a class="brand" id="homeLink" href="#" title="처음 화면으로" aria-label="PDF 업무 도구 — 처음 화면으로"><h1>PDF 업무 도구</h1></a>
   <button id="btn-add" class="primary">파일 추가</button>
   <input id="file-input" type="file" accept="application/pdf,.pdf" multiple hidden>
   <span class="sep"></span>
@@ -2760,6 +2773,13 @@ function setTab(name) {
   if (name === "rs") renderRestore();
 }
 for (const t of $$(".tab")) t.onclick = () => setTab(t.dataset.tab);
+// 제목을 누르면 처음 화면으로: 편집 탭 · 쪽 목록 맨 위 (넣은 파일, 선택, 가명 대응표, 붙여 넣은 글은 그대로 둠)
+function goHome() {
+  if (S.tab !== "edit") setTab("edit");
+  $("#scroller").scrollTop = 0; $("#pane-edit").scrollTop = 0;
+  scrollTo(0, 0); document.body.scrollTop = 0;
+}
+$("#homeLink").addEventListener("click", e => { e.preventDefault(); goHome(); });
 
 $("#btn-add").onclick = $("#btn-add2").onclick = () => $("#file-input").click();
 $("#file-input").onchange = e => { addFiles(e.target.files); e.target.value = ""; };
