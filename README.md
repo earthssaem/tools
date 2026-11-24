@@ -9,6 +9,7 @@
 ```
 index.html      도구 목록 페이지 (임시. 허브 디자인은 따로 정할 예정)
 icon.svg        메인 아이콘(망치). 브라우저 탭과 목록 페이지 제목에 씀
+CLAUDE.md       Claude Code 작업 규칙 (변경 후 항상 main까지 머지, 머지 전 확인, 지켜야 할 것)
 vercel.json     Vercel 배포 설정 (/pdf 와 /pdf/ 둘 다 열리게 함, /gif 에 멀티스레드용 헤더)
 pdf/            PDF 업무 도구
 gif/            움짤 메이커
