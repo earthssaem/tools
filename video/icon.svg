@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="동영상 편집기">
+  <!-- 이 도구의 브라우저 탭 아이콘(index.html 안에 들어 있는 것)과 같은 그림. 도구 목록 페이지에서 쓴다. -->
+  <rect width="32" height="32" rx="7" fill="#0f7b6c"/>
+  <rect x="5" y="9" width="22" height="14" rx="2" fill="#fff"/>
+  <g fill="#0f7b6c">
+    <rect x="7" y="10.6" width="2.4" height="1.8"/><rect x="11.2" y="10.6" width="2.4" height="1.8"/><rect x="18.4" y="10.6" width="2.4" height="1.8"/><rect x="22.6" y="10.6" width="2.4" height="1.8"/>
+    <rect x="7" y="19.6" width="2.4" height="1.8"/><rect x="11.2" y="19.6" width="2.4" height="1.8"/><rect x="18.4" y="19.6" width="2.4" height="1.8"/><rect x="22.6" y="19.6" width="2.4" height="1.8"/>
+  </g>
+  <path d="M16 6v20" stroke="#ffd500" stroke-width="2" stroke-dasharray="3 2"/>
+</svg>
