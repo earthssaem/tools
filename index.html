@@ -4,75 +4,175 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>연경쌤의 업무 도구함</title>
+<meta name="description" content="설치 없이 브라우저에서 바로 쓰는 교사 업무 도구 모음. 파일은 내 컴퓨터 밖으로 나가지 않습니다.">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<!-- 임시 목록 페이지. 허브 디자인은 따로 정한 뒤 바꾼다. -->
 <style>
-  body { margin: 0; font-family: "Pretendard", "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", system-ui, sans-serif; color: #1d2433; background: #fff; line-height: 1.6; }
-  main { max-width: 640px; margin: 0 auto; padding: 48px 20px 24px; }
-  h1 { font-size: 24px; margin: 0 0 24px; display: flex; align-items: center; gap: 12px; }
-  h1 img { width: 40px; height: 40px; flex: none; }
-  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
-  a.card { display: flex; align-items: center; gap: 14px; border: 1px solid #dfe2e8; border-radius: 8px; padding: 14px 16px; color: inherit; text-decoration: none; }
-  a.card img { width: 40px; height: 40px; flex: none; }
-  a.card:hover, a.card:focus-visible { border-color: #2456c9; }
-  .name { font-weight: 700; }
-  .desc { color: #5a6375; font-size: 14px; }
-  footer { max-width: 640px; margin: 0 auto; padding: 24px 20px 40px; color: #5a6375; font-size: 13px; line-height: 1.9; }
+  :root { --bg: #f3f5f9; --panel: #fff; --line: #dfe3ea; --text: #1d2433; --muted: #5a6375; --brand: #2456c9; }
+  * { box-sizing: border-box; }
+  body { margin: 0; word-break: keep-all; overflow-wrap: break-word; font-family: "Pretendard", "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", system-ui, sans-serif; color: var(--text); background: var(--bg); line-height: 1.6; }
+  a { color: inherit; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+  /* 머리: 이름과 한 줄 소개 */
+  .hero { background: linear-gradient(135deg, #1f4bb3 0%, #2c63dd 55%, #3f7ff0 100%); color: #fff; padding: 52px 0 96px; }
+  .hero .wrap { display: flex; align-items: center; gap: 22px; }
+  .hero img { width: 76px; height: 76px; flex: none; border-radius: 18px; box-shadow: 0 0 0 3px rgba(255, 255, 255, .28); }
+  .hero h1 { font-size: 32px; line-height: 1.25; margin: 0 0 6px; letter-spacing: -.02em; }
+  .hero p { margin: 0; font-size: 16.5px; color: rgba(255, 255, 255, .9); text-wrap: balance; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding: 0; list-style: none; }
+  .chips li { font-size: 13px; font-weight: 600; padding: 4px 12px; border-radius: 999px; background: rgba(255, 255, 255, .16); border: 1px solid rgba(255, 255, 255, .3); white-space: nowrap; }
+
+  /* 도구 카드 */
+  main.wrap { margin-top: -60px; padding-bottom: 8px; }      /* 카드가 파란 머리 위로 조금 올라온다 */
+  .grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+  a.card {
+    --c: var(--brand);
+    display: flex; flex-direction: column; gap: 10px; height: 100%; padding: 22px 22px 18px; text-decoration: none;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 6px 18px rgba(24, 39, 75, .07);
+    transition: transform .15s, box-shadow .15s, border-color .15s;
+  }
+  a.card:hover, a.card:focus-visible { transform: translateY(-3px); border-color: var(--c); box-shadow: 0 12px 28px rgba(24, 39, 75, .14); outline: none; }
+  a.card:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 35%, transparent), 0 12px 28px rgba(24, 39, 75, .14); }
+  .card .head { display: flex; align-items: center; gap: 14px; }
+  .card .head img { width: 54px; height: 54px; flex: none; border-radius: 13px; }
+  .card .name { font-size: 19px; font-weight: 700; letter-spacing: -.01em; line-height: 1.3; }
+  .card .desc { color: var(--muted); font-size: 14.5px; margin: 0; }
+  .card .tags { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 0; padding: 0; }
+  .card .tags li { font-size: 12.5px; font-weight: 600; padding: 2px 9px; border-radius: 7px; color: var(--c); background: color-mix(in srgb, var(--c) 10%, #fff); white-space: nowrap; }
+  .card .go { margin-top: auto; padding-top: 10px; font-size: 14px; font-weight: 700; color: var(--c); }
+  .card .go::after { content: "→"; display: inline-block; margin-left: 5px; transition: transform .15s; }
+  a.card:hover .go::after { transform: translateX(3px); }
+
+  /* 이럴 때 쓰세요 */
+  .when { margin-top: 44px; }
+  .when h2 { font-size: 20px; margin: 0 0 14px; letter-spacing: -.01em; }
+  .when ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 18px; }
+  .when a {
+    --c: var(--brand);
+    display: flex; align-items: center; gap: 12px; padding: 12px 16px; text-decoration: none; height: 100%;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; transition: border-color .15s, background .15s;
+  }
+  .when a:hover, .when a:focus-visible { border-color: var(--c); background: color-mix(in srgb, var(--c) 4%, #fff); outline: none; }
+  .when img { width: 30px; height: 30px; flex: none; border-radius: 8px; }
+  .when .q { flex: 1; font-size: 14.5px; min-width: 0; }
+  .when .t { flex: none; font-size: 12.5px; font-weight: 700; color: var(--c); white-space: nowrap; }
+
+  /* 약속 */
+  .promise { margin-top: 44px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+  .promise div { padding: 4px 2px; }
+  .promise h3 { font-size: 15.5px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+  .promise h3 svg { width: 20px; height: 20px; flex: none; color: var(--brand); }
+  .promise p { margin: 0; color: var(--muted); font-size: 14px; }
+
+  footer { margin-top: 48px; border-top: 1px solid var(--line); padding: 22px 0 40px; color: var(--muted); font-size: 13px; line-height: 1.9; }
   footer .part { white-space: nowrap; }      /* 좁은 화면에서는 덩어리 사이에서만 줄이 바뀐다 */
-  footer .blog { color: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); text-underline-offset: 3px; }
-  footer .blog:hover { color: #1d2433; text-decoration-color: currentColor; }
-  footer .hub { color: inherit; font-weight: 500; white-space: nowrap; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); text-underline-offset: 3px; }
-  footer .hub:hover { color: #1d2433; text-decoration-color: currentColor; }
+  footer .blog, footer .hub { color: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); text-underline-offset: 3px; }
+  footer .hub { font-weight: 500; white-space: nowrap; }
+  footer .blog:hover, footer .hub:hover { color: var(--text); text-decoration-color: currentColor; }
+
+  @media (max-width: 980px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .promise { grid-template-columns: 1fr; gap: 14px; } }
+  @media (max-width: 640px) {
+    .wrap { padding: 0 16px; }
+    .hero { padding: 32px 0 84px; }
+    .hero .wrap { flex-direction: column; align-items: flex-start; gap: 14px; }
+    .hero img { width: 56px; height: 56px; border-radius: 14px; }
+    .hero h1 { font-size: 25px; }
+    .hero p { font-size: 15px; }
+    .grid, .when ul { grid-template-columns: 1fr; }
+    .when a { align-items: flex-start; }
+    .when .t { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { a.card, .card .go::after, .when a { transition: none; } a.card:hover { transform: none; } }
 </style>
 </head>
 <body>
-<main>
-  <h1><img src="icon.svg" alt="">연경쌤의 업무 도구함</h1>
-  <ul>
-    <li><a class="card" href="pdf/">
-      <img src="pdf/icon.svg" alt="">
-      <div>
-        <div class="name">PDF 업무 도구</div>
-        <div class="desc">PDF 합치기·페이지 삭제·순서 정리, 개인정보 가명 처리, Markdown 변환</div>
-      </div>
+
+<header class="hero">
+  <div class="wrap">
+    <img src="icon.svg" alt="">
+    <div>
+      <h1>연경쌤의 업무 도구함</h1>
+      <p>설치 없이 브라우저에서 바로 쓰는 교사 업무 도구 모음입니다.</p>
+      <ul class="chips">
+        <li>설치·가입 없음</li>
+        <li>파일이 컴퓨터 밖으로 나가지 않음</li>
+        <li>무료 · 광고 없음</li>
+      </ul>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- 도구를 추가하면 여기에 카드 하나, 아래 '이럴 때 쓰세요'에 한두 줄을 넣는다. --c는 그 도구 아이콘의 바탕색 -->
+  <ul class="grid">
+    <li><a class="card" href="pdf/" style="--c:#2456c9">
+      <div class="head"><img src="pdf/icon.svg" alt=""><div class="name">PDF 업무 도구</div></div>
+      <p class="desc">여러 PDF를 합치고 쪽을 정리합니다. 이름·주민등록번호를 가명으로 바꿔 AI에 넣고, 답은 실제 이름으로 되돌립니다.</p>
+      <ul class="tags"><li>합치기·쪽 정리</li><li>개인정보 가명 처리</li><li>Markdown 변환</li></ul>
+      <span class="go">열기</span>
     </a></li>
-    <li><a class="card" href="gif/">
-      <img src="gif/icon.svg" alt="">
-      <div>
-        <div class="name">움짤 메이커</div>
-        <div class="desc">웹앱 화면을 녹화해 기능별 GIF로 자르고, 블로그 용량에 맞춰 저장</div>
-      </div>
+    <li><a class="card" href="hwpx/" style="--c:#6d3fc8">
+      <div class="head"><img src="hwpx/icon.svg" alt=""><div class="name">한글 문서 변환</div></div>
+      <p class="desc">공문·계획서(hwpx)를 AI가 읽기 좋은 Markdown으로 바꿉니다. 문단 번호와 표를 살리고 이름은 가명으로 바꿉니다.</p>
+      <ul class="tags"><li>hwpx → Markdown</li><li>표·문단 번호</li><li>가명 처리·되돌리기</li></ul>
+      <span class="go">열기</span>
     </a></li>
-    <li><a class="card" href="video/">
-      <img src="video/icon.svg" alt="">
-      <div>
-        <div class="name">동영상 편집기</div>
-        <div class="desc">긴 영상 자르기·이어 붙이기, 자막, 배속, 화면 자르기, 용량 줄여 mp4로 저장</div>
-      </div>
+    <li><a class="card" href="photo/" style="--c:#c2410c">
+      <div class="head"><img src="photo/icon.svg" alt=""><div class="name">사진 도구</div></div>
+      <p class="desc">학생 얼굴과 이름표를 가리고, 여러 장의 용량을 한꺼번에 줄입니다. 저장본에는 촬영 위치가 남지 않습니다.</p>
+      <ul class="tags"><li>모자이크</li><li>용량 줄이기</li><li>아이폰 사진(HEIC)</li><li>위치 정보 지우기</li></ul>
+      <span class="go">열기</span>
     </a></li>
-    <li><a class="card" href="photo/">
-      <img src="photo/icon.svg" alt="">
-      <div>
-        <div class="name">사진 도구</div>
-        <div class="desc">얼굴·이름표 가리기, 여러 장 용량 줄이기, 아이폰 사진(HEIC) 변환, 촬영 위치 지우기</div>
-      </div>
+    <li><a class="card" href="video/" style="--c:#0f7b6c">
+      <div class="head"><img src="video/icon.svg" alt=""><div class="name">동영상 편집기</div></div>
+      <p class="desc">긴 촬영 영상에서 필요한 부분만 남기고 자막과 배속을 넣습니다. 자르기만 했다면 화질 그대로 바로 저장됩니다.</p>
+      <ul class="tags"><li>자르기·이어 붙이기</li><li>자막</li><li>배속</li><li>용량 줄이기</li></ul>
+      <span class="go">열기</span>
     </a></li>
-    <li><a class="card" href="hwpx/">
-      <img src="hwpx/icon.svg" alt="">
-      <div>
-        <div class="name">한글 문서 변환</div>
-        <div class="desc">한글 문서(hwpx)를 AI에 넣기 좋은 Markdown으로, 이름은 가명으로 바꿨다가 되돌리기</div>
-      </div>
+    <li><a class="card" href="gif/" style="--c:#1769e0">
+      <div class="head"><img src="gif/icon.svg" alt=""><div class="name">움짤 메이커</div></div>
+      <p class="desc">웹앱 화면을 녹화해 기능별로 잘라 움직이는 그림(GIF)으로 만듭니다. 블로그에 올릴 용량에 맞춰 줍니다.</p>
+      <ul class="tags"><li>화면 녹화</li><li>GIF·webp</li><li>목표 용량 맞춤</li></ul>
+      <span class="go">열기</span>
     </a></li>
-    <li><a class="card" href="qr/">
-      <img src="qr/icon.svg" alt="">
-      <div>
-        <div class="name">QR 코드 만들기</div>
-        <div class="desc">주소 여러 개를 이름 붙은 QR로 한 장에 모아 인쇄, 하트 모양 꾸미기, 만료 없는 QR</div>
-      </div>
+    <li><a class="card" href="qr/" style="--c:#d6336c">
+      <div class="head"><img src="qr/icon.svg" alt=""><div class="name">QR 코드 만들기</div></div>
+      <p class="desc">주소 여러 개를 이름이 붙은 QR로 한 장에 모아 인쇄합니다. 하트 모양으로 꾸밀 수 있고, 만료되지 않습니다.</p>
+      <ul class="tags"><li>한 장에 모아 인쇄</li><li>하트 꾸미기</li><li>읽기 확인</li></ul>
+      <span class="go">열기</span>
     </a></li>
   </ul>
+
+  <section class="when" aria-labelledby="whenTitle">
+    <h2 id="whenTitle">이럴 때 쓰세요</h2>
+    <ul>
+      <li><a href="pdf/" style="--c:#2456c9"><img src="pdf/icon.svg" alt=""><span class="q">생기부·상담 기록 PDF를 AI에 넣기 전에 이름을 가리고 싶을 때</span><span class="t">PDF 업무 도구</span></a></li>
+      <li><a href="pdf/" style="--c:#2456c9"><img src="pdf/icon.svg" alt=""><span class="q">PDF 여러 개를 하나로 합치거나 쪽 순서를 바꿀 때</span><span class="t">PDF 업무 도구</span></a></li>
+      <li><a href="hwpx/" style="--c:#6d3fc8"><img src="hwpx/icon.svg" alt=""><span class="q">한글로 된 공문·계획서를 AI에게 읽히고 싶을 때</span><span class="t">한글 문서 변환</span></a></li>
+      <li><a href="photo/" style="--c:#c2410c"><img src="photo/icon.svg" alt=""><span class="q">학생 얼굴이 나온 사진을 블로그나 가정통신문에 올릴 때</span><span class="t">사진 도구</span></a></li>
+      <li><a href="photo/" style="--c:#c2410c"><img src="photo/icon.svg" alt=""><span class="q">아이폰 사진이 안 열리거나 용량이 너무 클 때</span><span class="t">사진 도구</span></a></li>
+      <li><a href="video/" style="--c:#0f7b6c"><img src="video/icon.svg" alt=""><span class="q">수업·실험 영상에서 필요한 부분만 잘라 내고 싶을 때</span><span class="t">동영상 편집기</span></a></li>
+      <li><a href="gif/" style="--c:#1769e0"><img src="gif/icon.svg" alt=""><span class="q">웹앱 사용법을 움직이는 그림으로 보여 주고 싶을 때</span><span class="t">움짤 메이커</span></a></li>
+      <li><a href="qr/" style="--c:#d6336c"><img src="qr/icon.svg" alt=""><span class="q">활동지나 칠판에 링크를 QR 코드로 붙이고 싶을 때</span><span class="t">QR 코드 만들기</span></a></li>
+    </ul>
+  </section>
+
+  <section class="promise" aria-label="이 도구함의 약속">
+    <div>
+      <h3><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="4" y="9" width="12" height="8" rx="1.8"/><path d="M6.6 9V6.6a3.4 3.4 0 0 1 6.8 0V9"/></svg>파일은 내 컴퓨터 안에서만</h3>
+      <p>문서·사진·영상을 서버로 보내지 않습니다. 모든 처리는 지금 열어 둔 브라우저 안에서 끝납니다.</p>
+    </div>
+    <div>
+      <h3><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 4l12 12M16 4L4 16" stroke-linecap="round"/><circle cx="10" cy="10" r="8"/></svg>남기지 않습니다</h3>
+      <p>쿠키나 저장소를 쓰지 않습니다. 창을 닫으면 넣은 파일과 작업 내용이 모두 사라집니다.</p>
+    </div>
+    <div>
+      <h3><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 3v9m0 0l-3.4-3.4M10 12l3.4-3.4M4 15.5h12" stroke-linecap="round" stroke-linejoin="round"/></svg>설치도 가입도 없이</h3>
+      <p>크롬이나 엣지에서 주소만 열면 됩니다. 학교 컴퓨터에 프로그램을 깔 필요가 없습니다.</p>
+    </div>
+  </section>
 </main>
-<footer><span class="part">© 2026 제작: 김연경(earthssaem@gmail.com)</span> | <span class="part">블로그: <a class="blog" href="https://blog.naver.com/earthssaem" target="_blank" rel="noopener">blog.naver.com/earthssaem</a></span><br><a class="hub" href="https://earthssaem-lab.vercel.app/" target="_blank" rel="noopener">연경쌤의 지구과학 실험실 둘러보기 →</a></footer>
+
+<footer><div class="wrap"><span class="part">© 2026 제작: 김연경(earthssaem@gmail.com)</span> | <span class="part">블로그: <a class="blog" href="https://blog.naver.com/earthssaem" target="_blank" rel="noopener">blog.naver.com/earthssaem</a></span><br><a class="hub" href="https://earthssaem-lab.vercel.app/" target="_blank" rel="noopener">연경쌤의 지구과학 실험실 둘러보기 →</a></div></footer>
 </body>
 </html>
