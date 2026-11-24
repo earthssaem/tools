@@ -1,0 +1,1975 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- 이 페이지는 자기 자신(같은 주소)에서 받은 파일만 불러올 수 있다. 바깥으로 나가는 요청은 브라우저가 막는다. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' blob:; worker-src 'self' blob:; style-src 'unsafe-inline'; img-src 'self' blob: data:; media-src blob:; connect-src 'self' blob:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>동영상 편집기</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f7b6c'/%3E%3Crect x='5' y='9' width='22' height='14' rx='2' fill='%23fff'/%3E%3Cpath d='M16 6v20' stroke='%23ffd500' stroke-width='2' stroke-dasharray='3 2'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f3f5f8; --panel: #ffffff; --line: #dde3ea; --line2: #c9d1db;
+  --text: #1b2530; --muted: #657282; --accent: #1769e0; --accent-soft: #e8f0fd;
+  --danger: #d43c3c; --warn-bg: #fff6dd; --warn-text: #7a5600; --ok: #1f9d55;
+  --stage: #10151b; --radius: 8px;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.45 "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+kbd {
+  font: 11px/1 ui-monospace, Consolas, monospace; padding: 2px 5px; border: 1px solid var(--line2);
+  border-bottom-width: 2px; border-radius: 4px; background: #fff; color: var(--muted);
+}
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 13px; white-space: nowrap;
+  border: 1px solid var(--line2); border-radius: 7px; background: #fff; color: var(--text); cursor: pointer;
+}
+.btn:hover:not(:disabled) { border-color: #9aa7b6; background: #f8fafc; }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.btn.primary:hover:not(:disabled) { background: #0f58c4; border-color: #0f58c4; }
+.btn.danger { color: #b42323; border-color: #e3b1b1; }
+.btn.sm { height: 30px; padding: 0 10px; font-size: 13px; }
+.btn.xs { height: 26px; padding: 0 8px; font-size: 12px; border-radius: 6px; }
+.btn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+input[type=text], input[type=number], select, textarea {
+  padding: 0 10px; border: 1px solid var(--line2); border-radius: 7px; background: #fff; min-width: 0;
+}
+input[type=text], input[type=number], select { height: 34px; }
+textarea { padding: 7px 10px; resize: vertical; width: 100%; line-height: 1.4; }
+input:focus-visible, select:focus-visible, button:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* 상단 */
+.top {
+  display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--panel);
+  border-bottom: 1px solid var(--line); flex-wrap: wrap;
+}
+.top h1 { font-size: 17px; margin: 0 8px 0 0; letter-spacing: -.01em; white-space: nowrap; }
+.spacer { flex: 1; }
+.privacy { font-size: 12px; color: var(--muted); white-space: nowrap; }
+#notices:empty { display: none; }
+.notice {
+  padding: 8px 16px; background: var(--warn-bg); color: var(--warn-text); font-size: 13px;
+  border-bottom: 1px solid #f0e2b4; display: flex; gap: 10px; align-items: center;
+}
+.notice button { margin-left: auto; }
+
+/* 본문 */
+main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 340px; min-height: 0; }
+.left { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.stage { flex: 1; min-height: 0; background: var(--stage); position: relative; display: grid; place-items: center; overflow: hidden; }
+.vbox { position: relative; background: #000; }
+.vbox canvas { display: block; width: 100%; height: 100%; }
+#cropLayer { position: absolute; inset: 0; overflow: hidden; cursor: crosshair; touch-action: none; user-select: none; }
+#cropRect { position: absolute; border: 1.5px solid #fff; box-shadow: 0 0 0 4000px rgba(0, 0, 0, .58); cursor: move; }
+#cropRect i { position: absolute; width: 12px; height: 12px; background: #fff; border: 1px solid #1b2530; border-radius: 2px; }
+#cropRect i[data-h=nw] { left: -7px; top: -7px; cursor: nwse-resize; }
+#cropRect i[data-h=ne] { right: -7px; top: -7px; cursor: nesw-resize; }
+#cropRect i[data-h=sw] { left: -7px; bottom: -7px; cursor: nesw-resize; }
+#cropRect i[data-h=se] { right: -7px; bottom: -7px; cursor: nwse-resize; }
+#cropRect i[data-h=n] { left: calc(50% - 6px); top: -7px; cursor: ns-resize; }
+#cropRect i[data-h=s] { left: calc(50% - 6px); bottom: -7px; cursor: ns-resize; }
+#cropRect i[data-h=w] { top: calc(50% - 6px); left: -7px; cursor: ew-resize; }
+#cropRect i[data-h=e] { top: calc(50% - 6px); right: -7px; cursor: ew-resize; }
+#cropRect.locked i[data-h=n], #cropRect.locked i[data-h=s], #cropRect.locked i[data-h=w], #cropRect.locked i[data-h=e] { display: none; }
+#cropSize {
+  position: absolute; left: 0; top: 0; transform: translateY(-100%); margin-top: -4px; padding: 1px 6px; white-space: nowrap;
+  font: 11px/1.5 ui-monospace, Consolas, monospace; color: #fff; background: rgba(0, 0, 0, .7); border-radius: 4px; pointer-events: none;
+}
+#cropRect.top0 #cropSize { transform: none; margin-top: 4px; left: 4px; }
+#cropHint {
+  position: absolute; left: 50%; top: 10px; transform: translateX(-50%); z-index: 4; pointer-events: none;
+  background: rgba(0, 0, 0, .72); color: #fff; font-size: 13px; padding: 5px 12px; border-radius: 6px; white-space: nowrap;
+}
+
+.empty { color: #c7d0da; text-align: center; padding: 24px; max-width: 580px; }
+.empty h2 { color: #fff; font-size: 20px; margin: 0 0 6px; }
+.empty p { margin: 0 0 18px; color: #9eabb9; text-wrap: balance; }
+.empty .acts { display: flex; gap: 10px; justify-content: center; margin-bottom: 22px; }
+.empty ol { text-align: left; margin: 0 auto; padding: 14px 18px 14px 36px; border: 1px dashed #3a4654; border-radius: 10px; color: #aab6c3; font-size: 13px; line-height: 1.9; }
+.stage.drag::after {
+  content: "여기에 놓으면 불러옵니다"; position: absolute; inset: 10px; border: 2px dashed #6ea8ff; border-radius: 12px;
+  background: rgba(23, 105, 224, .25); color: #fff; display: grid; place-items: center; font-size: 18px; font-weight: 600; z-index: 5;
+}
+#loading { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); background: rgba(0, 0, 0, .72); color: #fff; font-size: 13px; padding: 6px 14px; border-radius: 6px; z-index: 6; }
+
+/* 재생·편집 도구 */
+.tools {
+  display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--panel);
+  border-top: 1px solid var(--line); flex-wrap: wrap; font-size: 13px;
+}
+.tools .sep { width: 1px; height: 20px; background: var(--line); margin: 0 2px; }
+#timeLbl { font: 13px/1 ui-monospace, Consolas, monospace; min-width: 150px; }
+
+/* 타임라인 */
+.tlwrap { background: var(--panel); border-top: 1px solid var(--line); padding: 4px 0 0; }
+#tlScroll { overflow-x: auto; overflow-y: hidden; position: relative; }
+#tlView { position: sticky; left: 0; width: 100%; height: 132px; overflow: hidden; }
+#tlCv { display: block; width: 100%; height: 132px; touch-action: none; user-select: none; }
+#tlHead { position: absolute; top: 2px; bottom: 0; left: 0; width: 0; border-left: 2px solid #e23b3b; pointer-events: none; will-change: transform; }
+#tlHead::before { content: ""; position: absolute; left: -6px; top: -2px; border: 5px solid transparent; border-top: 7px solid #e23b3b; }
+#tlSpacer { height: 1px; }
+
+/* 옆 패널 */
+.side { background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+#panels { flex: 1; overflow-y: auto; padding: 4px 12px 12px; }
+.sec { border-bottom: 1px solid var(--line); padding: 10px 2px 12px; display: flex; flex-direction: column; gap: 8px; }
+.sec:last-child { border-bottom: 0; }
+.sec h2 { font-size: 14px; margin: 0; display: flex; align-items: baseline; gap: 8px; }
+.sec h2 small { color: var(--muted); font-weight: 400; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hint { color: var(--muted); font-size: 12.5px; line-height: 1.6; margin: 0; }
+.row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; }
+.row > span:first-child { width: 52px; color: var(--muted); flex: none; white-space: nowrap; }
+.row input[type=range] { flex: 1; min-width: 80px; }
+.row output { width: 42px; text-align: right; font-variant-numeric: tabular-nums; }
+.row select { height: 30px; font-size: 13px; }
+.seg { display: inline-flex; border: 1px solid var(--line2); border-radius: 7px; overflow: hidden; }
+.seg button { border: 0; background: #fff; height: 28px; padding: 0 10px; font-size: 12.5px; cursor: pointer; border-left: 1px solid var(--line2); }
+.seg button:first-child { border-left: 0; }
+.seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.chk { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; }
+.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.list li { display: flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; }
+.list li.sel { border-color: var(--accent); background: var(--accent-soft); }
+.list li.off { color: var(--muted); }
+.list li .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list li.pick { cursor: pointer; }
+.list li small { color: var(--muted); white-space: nowrap; }
+.sidefoot { border-top: 1px solid var(--line); padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+#btnExport2 { height: 40px; justify-content: center; font-size: 15px; }
+.srclink { align-self: flex-end; font-size: 12px; color: var(--muted); }
+.srclink:hover { color: var(--text); }
+
+/* 내보내기 창 */
+.modal { position: fixed; inset: 0; background: rgba(10, 14, 18, .6); z-index: 40; display: grid; place-items: center; padding: 20px; }
+.sheet { background: #fff; border-radius: 12px; width: min(520px, 100%); max-height: 100%; overflow: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 20px 60px rgba(0, 0, 0, .35); }
+.sheet h2 { margin: 0; font-size: 17px; }
+.opt { display: flex; gap: 10px; border: 1px solid var(--line2); border-radius: 9px; padding: 12px; cursor: pointer; align-items: flex-start; }
+.opt.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.opt.dis { cursor: default; background: #f6f7f9; }
+.opt.dis b { color: var(--muted); }
+.opt input { margin-top: 3px; }
+.opt > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.opt small { color: var(--muted); }
+.opt p { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+.opt p.warn { color: var(--warn-text); }
+.encOpts { display: flex; flex-direction: column; gap: 6px; }
+.encOpts .row > span:first-child { width: 64px; }
+#expMB { width: 84px; height: 30px; }
+#expSummary { margin: 0; font-size: 13px; }
+.sheet .acts { display: flex; gap: 8px; justify-content: flex-end; }
+.bigbar { height: 10px; border-radius: 5px; background: #e6eaef; overflow: hidden; }
+.bigbar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+#runText { margin: 0; font-size: 15px; font-weight: 600; }
+#runSub { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+#toasts { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 50; align-items: center; pointer-events: none; }
+.toast { background: #1b2530; color: #fff; padding: 9px 14px; border-radius: 8px; font-size: 13px; box-shadow: 0 6px 20px rgba(0, 0, 0, .25); max-width: 80vw; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>동영상 편집기</h1>
+  <button id="btnAdd" class="btn" type="button">＋ 영상 추가</button>
+  <input id="file" type="file" accept="video/*,.mp4,.mov,.m4v,.webm,.mkv" multiple hidden>
+  <input id="bgmFile" type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac,.aac" hidden>
+  <button id="btnUndo" class="btn sm" type="button" title="되돌리기 (Ctrl+Z)" disabled>↶ 되돌리기</button>
+  <button id="btnRedo" class="btn sm" type="button" title="다시 하기 (Ctrl+Y)" disabled>↷ 다시 하기</button>
+  <span class="spacer"></span>
+  <span class="privacy">영상은 이 컴퓨터 안에서만 처리합니다</span>
+  <button id="btnExport" class="btn primary" type="button" disabled>내보내기</button>
+</header>
+
+<div id="notices"></div>
+
+<main>
+  <section class="left">
+    <div class="stage" id="stage">
+      <div class="empty" id="empty">
+        <h2>긴 영상을 자르고 다듬기</h2>
+        <p>촬영한 영상(mp4·mov·webm)을 여기로 끌어다 놓으세요. 여러 개를 넣으면 순서대로 이어 붙입니다.</p>
+        <div class="acts">
+          <button class="btn primary" type="button" id="btnAdd2">＋ 영상 추가</button>
+        </div>
+        <ol>
+          <li>필요 없는 곳에서 <kbd>S</kbd>로 나누고 <kbd>Delete</kbd>로 지웁니다.</li>
+          <li>조각을 눌러 속도와 소리 크기를 바꿉니다.</li>
+          <li>자막을 넣고, 화면에서 필요한 부분만 남깁니다.</li>
+          <li>"내보내기"로 mp4를 저장합니다. 자르기만 했다면 화질 그대로 바로 저장됩니다.</li>
+        </ol>
+      </div>
+      <div class="vbox" id="vbox" hidden>
+        <canvas id="cv"></canvas>
+        <div id="cropLayer" hidden>
+          <div id="cropRect" hidden>
+            <span id="cropSize"></span>
+            <i data-h="nw"></i><i data-h="n"></i><i data-h="ne"></i><i data-h="e"></i>
+            <i data-h="se"></i><i data-h="s"></i><i data-h="sw"></i><i data-h="w"></i>
+          </div>
+        </div>
+      </div>
+      <div id="cropHint" hidden>남길 부분을 드래그해서 정하세요</div>
+      <div id="loading" hidden></div>
+    </div>
+
+    <div class="tools" id="tools" hidden>
+      <button class="btn sm" type="button" id="btnPlay" title="재생/일시정지 (Space)">▶ 재생</button>
+      <button class="btn xs" type="button" id="btnPrev" title="1프레임 뒤로 (←) · Shift를 누르면 1초">◀</button>
+      <button class="btn xs" type="button" id="btnNext" title="1프레임 앞으로 (→) · Shift를 누르면 1초">▶</button>
+      <span id="timeLbl">0:00.0 / 0:00.0</span>
+      <span class="sep"></span>
+      <button class="btn sm" type="button" id="btnSplit" title="재생 위치에서 조각을 둘로 나눕니다">나누기 <kbd>S</kbd></button>
+      <button class="btn sm" type="button" id="btnTrimL" title="이 조각에서 재생 위치보다 앞부분을 지웁니다">앞 지우기 <kbd>Q</kbd></button>
+      <button class="btn sm" type="button" id="btnTrimR" title="이 조각에서 재생 위치보다 뒷부분을 지웁니다">뒤 지우기 <kbd>W</kbd></button>
+      <button class="btn sm danger" type="button" id="btnDel" title="선택한 조각(또는 자막)을 지웁니다">삭제 <kbd>Del</kbd></button>
+      <span class="spacer"></span>
+      <button class="btn xs" type="button" id="btnZoomOut" title="타임라인 축소 (-)">－</button>
+      <button class="btn xs" type="button" id="btnZoomIn" title="타임라인 확대 (+)">＋</button>
+      <button class="btn xs" type="button" id="btnZoomFit" title="전체가 한눈에 보이게">전체 보기</button>
+    </div>
+
+    <div class="tlwrap" id="tlwrap" hidden>
+      <div id="tlScroll">
+        <div id="tlView"><canvas id="tlCv"></canvas><div id="tlHead"></div></div>
+        <div id="tlSpacer"></div>
+      </div>
+    </div>
+  </section>
+
+  <aside class="side">
+    <div id="panels">
+      <section class="sec" id="pClip">
+        <h2>조각 <small id="clipInfo"></small></h2>
+        <p class="hint" id="clipHint">타임라인에서 조각을 누르면 속도와 소리 크기를 바꿀 수 있습니다.</p>
+        <div id="clipBody" hidden>
+          <div class="row"><span>속도</span>
+            <select id="clipSpeed">
+              <option value="0.5">0.5배 (느리게)</option>
+              <option value="1">1배</option>
+              <option value="1.25">1.25배</option>
+              <option value="1.5">1.5배</option>
+              <option value="2">2배</option>
+              <option value="4">4배</option>
+              <option value="8">8배</option>
+            </select>
+          </div>
+          <div class="row" style="margin-top:8px"><span>소리</span><input id="clipVol" type="range" min="0" max="300" step="5"><output id="clipVolOut"></output></div>
+          <div class="row" style="margin-top:8px"><span>순서</span>
+            <button class="btn xs" type="button" id="clipLeft">◀ 앞으로</button>
+            <button class="btn xs" type="button" id="clipRight">뒤로 ▶</button>
+            <label class="chk" style="margin-left:auto"><input type="checkbox" id="clipMute">이 조각 소리 끄기</label>
+          </div>
+        </div>
+      </section>
+
+      <section class="sec" id="pText">
+        <h2>자막 <small id="textInfo"></small></h2>
+        <div class="row"><button class="btn sm" type="button" id="btnText" disabled>＋ 자막 추가 <kbd>T</kbd></button></div>
+        <div id="textBody" hidden>
+          <textarea id="textVal" rows="2" maxlength="200" placeholder="자막 내용"></textarea>
+          <div class="row" style="margin-top:8px"><span>위치</span>
+            <span class="seg" id="textPos"><button type="button" data-v="top">위</button><button type="button" data-v="mid">가운데</button><button type="button" data-v="bot">아래</button></span>
+            <small class="hint">화면에서 끌어도 됩니다</small>
+          </div>
+          <div class="row" style="margin-top:8px"><span>크기</span>
+            <span class="seg" id="textSize"><button type="button" data-v="s">작게</button><button type="button" data-v="m">보통</button><button type="button" data-v="l">크게</button></span>
+          </div>
+          <div class="row" style="margin-top:8px"><span>모양</span>
+            <select id="textStyle">
+              <option value="outline">흰 글자 + 검은 테두리</option>
+              <option value="box">검은 바탕 + 흰 글자</option>
+              <option value="yellow">노란 글자 + 검은 테두리</option>
+              <option value="light">흰 바탕 + 검은 글자</option>
+            </select>
+          </div>
+          <div class="row" style="margin-top:8px"><span>시간</span>
+            <button class="btn xs" type="button" id="textIn" title="자막이 나오기 시작하는 때를 지금 재생 위치로">여기서 시작</button>
+            <button class="btn xs" type="button" id="textOut" title="자막이 사라지는 때를 지금 재생 위치로">여기서 끝</button>
+            <small class="hint" id="textLen"></small>
+          </div>
+        </div>
+        <ul class="list" id="textList"></ul>
+      </section>
+
+      <section class="sec" id="pFrame">
+        <h2>화면 <small id="frameInfo"></small></h2>
+        <div class="row">
+          <button class="btn sm" type="button" id="btnCrop" disabled>화면 자르기</button>
+          <button class="btn sm" type="button" id="btnRot" disabled title="시계 방향으로 90도 돌립니다">↻ 90° 돌리기</button>
+        </div>
+        <div class="row" id="cropRow" hidden><span>비율</span>
+          <select id="ratio">
+            <option value="free">자유</option>
+            <option value="16:9">16:9</option>
+            <option value="4:3">4:3</option>
+            <option value="1:1">1:1</option>
+            <option value="9:16">9:16</option>
+          </select>
+          <button class="btn xs" type="button" id="btnCropReset">자르기 취소</button>
+        </div>
+        <p class="hint" id="frameHint"></p>
+      </section>
+
+      <section class="sec" id="pAudio">
+        <h2>소리</h2>
+        <label class="chk"><input type="checkbox" id="muteAll">영상의 원래 소리 모두 끄기</label>
+        <div class="row"><button class="btn sm" type="button" id="btnBgm">배경음악 넣기</button><button class="btn xs" type="button" id="btnBgmDel" hidden>빼기</button></div>
+        <div id="bgmBody" hidden>
+          <p class="hint" id="bgmName"></p>
+          <div class="row"><span>음량</span><input id="bgmVol" type="range" min="0" max="100" step="5"><output id="bgmVolOut"></output></div>
+          <div class="row" style="margin-top:6px; gap: 14px">
+            <label class="chk"><input type="checkbox" id="bgmLoop">끝까지 반복</label>
+            <label class="chk"><input type="checkbox" id="bgmFade">끝에서 서서히 줄이기</label>
+          </div>
+        </div>
+      </section>
+
+      <section class="sec" id="pFiles">
+        <h2>영상 파일</h2>
+        <ul class="list" id="fileList"></ul>
+        <p class="hint" id="fileHint">불러온 영상이 여기에 나옵니다.</p>
+      </section>
+    </div>
+    <div class="sidefoot">
+      <button id="btnExport2" class="btn primary" type="button" disabled>내보내기 (mp4 저장)</button>
+      <a class="srclink" href="https://github.com/earthssaem/tools/tree/main/video" target="_blank" rel="noopener noreferrer">소스·라이선스</a>
+    </div>
+  </aside>
+</main>
+
+<div id="dlg" class="modal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+    <h2 id="dlgTitle">내보내기</h2>
+    <div id="dlgForm" style="display:flex; flex-direction:column; gap:12px">
+      <label class="opt" id="optCopy">
+        <input type="radio" name="mode" value="copy">
+        <div>
+          <div><b>빠른 저장</b> <small>· 화질 그대로, 긴 영상도 금방 끝납니다</small></div>
+          <p id="copyNote"></p>
+        </div>
+      </label>
+      <label class="opt" id="optEnc">
+        <input type="radio" name="mode" value="encode">
+        <div>
+          <div><b>새로 만들기</b> <small>· 자막·배속·화면 자르기 반영, 용량 줄이기</small></div>
+          <p id="encNote"></p>
+          <div class="encOpts" id="encOpts">
+            <div class="row"><span>화면 크기</span><select id="expRes"></select></div>
+            <div class="row"><span>화질</span>
+              <select id="expQ">
+                <option value="high">높음</option>
+                <option value="mid">보통</option>
+                <option value="low">낮음 (용량 작게)</option>
+                <option value="size">용량 지정</option>
+              </select>
+              <input id="expMB" type="number" min="1" max="4000" step="1" value="100" hidden><span id="expMBu" hidden>MB 이하</span>
+            </div>
+          </div>
+        </div>
+      </label>
+      <div class="row"><span style="width:64px">파일 이름</span><input id="expName" type="text" maxlength="80" style="flex:1" autocomplete="off"><span>.mp4</span></div>
+      <p id="expSummary"></p>
+      <div class="acts">
+        <button id="expCancel" class="btn" type="button">닫기</button>
+        <button id="expGo" class="btn primary" type="button">저장 시작</button>
+      </div>
+    </div>
+    <div id="dlgRun" hidden style="display:flex; flex-direction:column; gap:12px">
+      <p id="runText"></p>
+      <div class="bigbar"><i id="runBar"></i></div>
+      <p id="runSub"></p>
+      <div class="acts">
+        <button id="runStop" class="btn" type="button">취소</button>
+        <button id="runClose" class="btn primary" type="button" hidden>닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toasts" aria-live="polite"></div>
+
+<script type="module">
+import {
+  Input, BlobSource, ALL_FORMATS, Output, Mp4OutputFormat, BufferTarget, StreamTarget, Quality,
+  CanvasSource, AudioSampleSource, AudioSample, VideoSampleSink, AudioSampleSink, CanvasSink,
+  EncodedPacketSink, EncodedVideoPacketSource, EncodedAudioPacketSource,
+  getFirstEncodableVideoCodec, getFirstEncodableAudioCodec,
+} from './lib/mediabunny-1.66.3/mediabunny.min.mjs';
+
+/* ───────────── 조정값 ───────────── */
+const CFG = {
+  MIN_CLIP: 0.1,            // 조각의 최소 길이(초, 원본 기준)
+  MIN_TEXT: 0.2,
+  TEXT_SEC: 3,              // 새 자막의 기본 길이(초)
+  MAX_FPS: 30,              // 새로 만들 때의 프레임 수 상한(하한은 24)
+  SR: 48000,                // 새로 만들 때의 소리 형식: 48kHz 스테레오
+  AUDIO_BITRATE: 128000,
+  BPP: { high: 0.13, mid: 0.08, low: 0.05 },   // 화질별 픽셀당 비트 수 (1080p 30fps에서 약 8 / 5 / 3 Mbps)
+  THUMB_MAX: 200,           // 영상 하나당 타임라인 그림 개수 상한
+  THUMB_H: 56,
+  MAX_PPS: 240,             // 타임라인 최대 확대(1초당 픽셀)
+  GATE_SEC: 1.5,            // 내보낼 때 화면과 소리가 서로 이만큼 이상 앞서가지 않게 한다
+  BUFFER_WARN: 1500 * 1024 * 1024,
+};
+const TEXT_SIZES = { s: 0.05, m: 0.07, l: 0.1 };          // 화면 높이에 대한 글자 크기
+const TEXT_POS = { top: 0.12, mid: 0.5, bot: 0.87 };
+const TEXT_FONT = '"Pretendard", "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", "Noto Sans KR", "Noto Sans CJK KR", sans-serif';
+const MB = 1024 * 1024;
+
+/* ───────────── 도우미 ───────────── */
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const even = v => Math.max(2, Math.round(v / 2) * 2);
+function fmtTime(t) {
+  t = Math.max(0, t);
+  const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t - h * 3600 - m * 60;
+  return h ? `${h}:${String(m).padStart(2, '0')}:${s.toFixed(1).padStart(4, '0')}` : `${m}:${s.toFixed(1).padStart(4, '0')}`;
+}
+const fmtClock = t => fmtTime(t).replace(/\.\d$/, '');
+function fmtDur(t) {
+  t = Math.max(0, Math.round(t));
+  const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+  return h ? `${h}시간 ${m}분` : m ? `${m}분 ${s}초` : `${s}초`;
+}
+const fmtMB = b => b >= 1024 * MB ? `${(b / 1024 / MB).toFixed(2)}GB` : b >= 10 * MB ? `${(b / MB).toFixed(0)}MB` : b >= MB ? `${(b / MB).toFixed(1)}MB` : `${Math.max(1, Math.round(b / 1024))}KB`;
+
+function toast(msg, ms = 3800) {
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = msg;
+  $('toasts').append(t);
+  setTimeout(() => t.remove(), ms);
+}
+function notice(id, text) {
+  if (document.querySelector(`.notice[data-id="${id}"]`)) return;
+  const n = document.createElement('div');
+  n.className = 'notice'; n.dataset.id = id;
+  const s = document.createElement('span'); s.textContent = text;
+  const b = document.createElement('button'); b.className = 'btn xs'; b.type = 'button'; b.textContent = '닫기';
+  b.onclick = () => n.remove();
+  n.append(s, b); $('notices').append(n);
+}
+function download(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+function el(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) { if (k === 'class') e.className = v; else if (k === 'text') e.textContent = v; else e[k] = v; }
+  e.append(...kids);
+  return e;
+}
+
+/* ───────────── 상태 ─────────────
+   doc은 되돌리기 대상(편집 내용), state는 그 밖의 화면 상태다.
+   조각(clip)은 원본 영상의 [start, end) 구간이고, 배열 순서가 곧 결과물의 순서다.
+   자막(text)은 원본 영상의 시각에 붙는다. 그래서 앞부분을 잘라 내도 자막은 같은 장면에 그대로 남는다. */
+const doc = {
+  clips: [],     // { id, srcId, start, end, speed, volume, muted }
+  texts: [],     // { id, srcId, start, end, text, x, y, size, style }
+  muteAll: false,
+  bgm: { on: false, volume: 0.3, loop: true, fade: true },
+};
+const state = {
+  sources: [],   // { id, file, name, url, video, input, vTrack, aTrack, w, h, duration, fps, crop, rot, thumbs, ... }
+  bgmFile: null, // { file, name, url, duration, input, track }
+  selClip: null, selText: null,
+  t: 0,          // 재생 위치(결과물 기준 초)
+  playing: false,
+  cropMode: false, ratio: 'free',
+  pps: 20, fit: true,
+  exporting: false, dirty: false, loading: 0,
+};
+const seq = { src: 0, clip: 0, text: 0 };
+const srcById = id => state.sources.find(s => s.id === id) || null;
+const clipById = id => doc.clips.find(c => c.id === id) || null;
+const textById = id => doc.texts.find(t => t.id === id) || null;
+
+/* 결과물 위의 배치. 조각을 순서대로 이어 붙인 시간표다. */
+let LAY = null;
+function lay() {
+  if (LAY) return LAY;
+  let t = 0;
+  const items = doc.clips.map((clip, i) => {
+    const d = (clip.end - clip.start) / clip.speed, it = { i, clip, src: srcById(clip.srcId), o0: t, o1: t + d };
+    t += d;
+    return it;
+  });
+  return (LAY = { items, total: t });
+}
+function locate(t) {
+  const { items, total } = lay();
+  if (!items.length) return null;
+  t = clamp(t, 0, total);
+  const it = items.find(x => t < x.o1 - 1e-9) || items[items.length - 1];
+  return { it, tSrc: clamp(it.clip.start + (t - it.o0) * it.clip.speed, it.clip.start, it.clip.end) };
+}
+const audible = clip => !doc.muteAll && !clip.muted && clip.volume > 0;
+
+/* ───────────── 되돌리기 ───────────── */
+const hist = { stack: [], idx: -1 };
+function snap() {
+  return JSON.stringify({ clips: doc.clips, texts: doc.texts, muteAll: doc.muteAll, bgm: doc.bgm, src: state.sources.map(s => ({ id: s.id, crop: s.crop, rot: s.rot })) });
+}
+function commit() {
+  const s = snap();
+  if (hist.stack[hist.idx] !== s) {
+    hist.stack.length = hist.idx + 1; hist.stack.push(s);
+    if (hist.stack.length > 200) hist.stack.shift();
+    hist.idx = hist.stack.length - 1;
+    state.dirty = true;
+  }
+  changed();
+}
+function restore(s) {
+  const o = JSON.parse(s);
+  doc.clips = o.clips.filter(c => srcById(c.srcId)); doc.texts = o.texts.filter(t => srcById(t.srcId));
+  doc.muteAll = o.muteAll; doc.bgm = o.bgm;
+  if (!state.bgmFile) doc.bgm.on = false;
+  for (const e of o.src) { const S = srcById(e.id); if (S) { S.crop = e.crop; S.rot = e.rot; } }
+  if (!clipById(state.selClip)) state.selClip = null;
+  if (!textById(state.selText)) state.selText = null;
+  state.dirty = true;
+  changed();
+}
+function undo() { if (hist.idx > 0 && !state.exporting) restore(hist.stack[--hist.idx]); }
+function redo() { if (hist.idx < hist.stack.length - 1 && !state.exporting) restore(hist.stack[++hist.idx]); }
+
+/* 편집 내용이 바뀐 뒤 화면 전체를 다시 맞춘다 */
+function changed() {
+  LAY = null;
+  const { items, total } = lay();
+  state.t = clamp(state.t, 0, total);
+  if (!items.length) { pause(); state.cropMode = false; }
+  if (state.playing) { const loc = locate(state.t); if (loc) enterClip(loc); else pause(); }
+  renderAll();
+}
+
+/* ───────────── 화면 크기 계산 ─────────────
+   src.w × src.h는 파일에 적힌 회전까지 반영한 크기이고, src.rot는 사용자가 더 돌린 각도다.
+   자르기 영역(src.crop)은 사용자가 돌린 뒤의 화면을 0~1로 본 좌표다. */
+const dispSize = src => src.rot % 180 ? { w: src.h, h: src.w } : { w: src.w, h: src.h };
+const cropN = src => src.crop || { x: 0, y: 0, w: 1, h: 1 };
+function croppedSize(src) { const d = dispSize(src), c = cropN(src); return { w: Math.max(2, d.w * c.w), h: Math.max(2, d.h * c.h) }; }
+/* 결과물의 화면 비율은 첫 조각을 따른다. 비율이 다른 조각은 위아래나 좌우에 검은 띠가 생긴다. */
+function baseSize() { const it = lay().items[0]; return it ? croppedSize(it.src) : { w: 1280, h: 720 }; }
+
+/* drawDisp(ctx, w, h)는 원본 그림을 (0,0)-(w,h)에 그리는 함수다. 미리보기는 <video>, 내보내기는 디코딩한 프레임을 그린다. */
+function drawSource(ctx, drawDisp, src, X, Y, W, H, full) {
+  const d = dispSize(src), c = full ? { x: 0, y: 0, w: 1, h: 1 } : cropN(src);
+  const cw = d.w * c.w, ch = d.h * c.h, k = Math.min(W / cw, H / ch);
+  const rw = cw * k, rh = ch * k, rx = X + (W - rw) / 2, ry = Y + (H - rh) / 2;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(rx, ry, rw, rh); ctx.clip();
+  ctx.translate(rx - c.x * d.w * k, ry - c.y * d.h * k); ctx.scale(k, k);     // 여기부터 좌표 단위는 '돌린 뒤 화면'의 픽셀
+  ctx.translate(d.w / 2, d.h / 2); ctx.rotate(src.rot * Math.PI / 180); ctx.translate(-src.w / 2, -src.h / 2);
+  drawDisp(ctx, src.w, src.h);
+  ctx.restore();
+}
+
+/* ───────────── 자막 그리기 ───────────── */
+function wrapLines(ctx, text, maxW) {
+  const out = [];
+  for (const raw of String(text).split('\n')) {
+    let line = '';
+    for (const tok of raw.split(/(\s+)/)) {
+      if (!tok) continue;
+      if (ctx.measureText(line + tok).width <= maxW) { line += tok; continue; }
+      if (line.trim()) { out.push(line.trimEnd()); line = ''; }
+      let w = tok.trimStart();
+      while (w && ctx.measureText(w).width > maxW) {      // 띄어쓰기 없이 긴 말은 글자 단위로 넘긴다
+        let n = w.length - 1;
+        while (n > 1 && ctx.measureText(w.slice(0, n)).width > maxW) n--;
+        out.push(w.slice(0, n)); w = w.slice(n);
+      }
+      line = w;
+    }
+    out.push(line.trimEnd());
+  }
+  return out;
+}
+function drawText(ctx, W, H, tx) {
+  const fs = Math.max(8, H * (TEXT_SIZES[tx.size] || TEXT_SIZES.m));
+  ctx.save();
+  ctx.font = `700 ${fs}px ${TEXT_FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const lines = wrapLines(ctx, tx.text || ' ', W * 0.9), lh = fs * 1.32;
+  const bw = Math.max(fs, ...lines.map(l => ctx.measureText(l).width)), bh = lines.length * lh;
+  const padX = fs * 0.5, padY = fs * 0.22;
+  const cx = clamp(tx.x * W, bw / 2 + padX, Math.max(bw / 2 + padX, W - bw / 2 - padX));
+  const cy = clamp(tx.y * H, bh / 2 + padY, Math.max(bh / 2 + padY, H - bh / 2 - padY));
+  const box = { x: cx - bw / 2 - padX, y: cy - bh / 2 - padY, w: bw + padX * 2, h: bh + padY * 2 };
+  const boxed = tx.style === 'box' || tx.style === 'light';
+  if (boxed) {
+    ctx.fillStyle = tx.style === 'box' ? 'rgba(0, 0, 0, .74)' : 'rgba(255, 255, 255, .92)';
+    ctx.beginPath(); ctx.roundRect(box.x, box.y, box.w, box.h, fs * 0.2); ctx.fill();
+    ctx.fillStyle = tx.style === 'box' ? '#fff' : '#111';
+  } else {
+    ctx.lineJoin = 'round'; ctx.lineWidth = fs * 0.17; ctx.strokeStyle = '#000';
+    ctx.fillStyle = tx.style === 'yellow' ? '#ffe14a' : '#fff';
+  }
+  lines.forEach((l, i) => {
+    const y = cy - bh / 2 + lh * (i + 0.5);
+    if (!boxed) ctx.strokeText(l, cx, y);
+    ctx.fillText(l, cx, y);
+  });
+  ctx.restore();
+  return box;
+}
+/* 한 장면을 그린다. 미리보기와 내보내기가 이 함수를 같이 쓰므로 보이는 대로 저장된다. */
+function compose(ctx, W, H, drawDisp, src, tSrc) {
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  if (drawDisp) drawSource(ctx, drawDisp, src, 0, 0, W, H, false);
+  const boxes = [];
+  for (const tx of doc.texts) {
+    if (tx.srcId === src.id && tSrc >= tx.start - 1e-6 && tSrc < tx.end) boxes.push({ id: tx.id, ...drawText(ctx, W, H, tx) });
+  }
+  return boxes;
+}
+
+/* ───────────── 미리보기 ───────────── */
+const cv = $('cv'), cx2 = cv.getContext('2d', { alpha: false });
+const pv = { W: 0, H: 0, boxes: [] };
+let drawQueued = false;
+function invalidate() { if (!drawQueued) { drawQueued = true; requestAnimationFrame(() => { drawQueued = false; draw(); }); } }
+function curSrc() { const loc = locate(state.t); return loc ? loc.it.src : null; }
+function layoutStage() {
+  const src = curSrc(); if (!src) return;
+  const b = state.cropMode ? dispSize(src) : baseSize();
+  const st = $('stage'), aw = st.clientWidth - 28, ah = st.clientHeight - 28;
+  const k = Math.min(aw / b.w, ah / b.h);
+  const w = Math.max(40, Math.floor(b.w * k)), h = Math.max(40, Math.floor(b.h * k));
+  $('vbox').style.width = w + 'px'; $('vbox').style.height = h + 'px';
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const W = Math.round(w * dpr), H = Math.round(h * dpr);
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  pv.W = W; pv.H = H;
+}
+function draw() {
+  const loc = locate(state.t);
+  if (!loc || !pv.W) return;
+  const src = loc.it.src, v = src.video, W = pv.W, H = pv.H;
+  const dd = (c, w, h) => { if (v.readyState >= 2) c.drawImage(v, 0, 0, w, h); };
+  if (state.cropMode) {
+    cx2.fillStyle = '#000'; cx2.fillRect(0, 0, W, H);
+    drawSource(cx2, dd, src, 0, 0, W, H, true);
+    pv.boxes = [];
+    return;
+  }
+  const tSrc = state.playing ? clamp(v.currentTime, loc.it.clip.start, loc.it.clip.end) : loc.tSrc;
+  pv.boxes = compose(cx2, W, H, dd, src, tSrc);
+  const sel = pv.boxes.find(b => b.id === state.selText);
+  if (sel && !state.playing) {       // 선택한 자막의 테두리(저장되는 영상에는 들어가지 않는다)
+    cx2.save(); cx2.strokeStyle = '#6ea8ff'; cx2.lineWidth = Math.max(1.5, H / 360); cx2.setLineDash([6, 4]);
+    cx2.strokeRect(sel.x - 3, sel.y - 3, sel.w + 6, sel.h + 6); cx2.restore();
+  }
+}
+/* 멈춰 있을 때 재생 위치의 장면을 띄운다 */
+function seekVideo(v, t) { v._want = t; if (!v.seeking && Math.abs(v.currentTime - t) > 1e-4) v.currentTime = t; }
+function syncVideo() {
+  if (state.playing) return;
+  const loc = locate(state.t); if (!loc) return;
+  for (const s of state.sources) if (!s.video.paused) s.video.pause();
+  // 프레임 경계에 딱 걸린 시각은 반올림 오차로 앞 프레임이 나올 수 있어 아주 조금 뒤를 가리킨다
+  seekVideo(loc.it.src.video, Math.max(0, Math.min(loc.tSrc + 0.0005, loc.it.clip.end - 0.01, loc.it.src.duration - 0.01)));
+  invalidate();
+}
+function frameStep() { const loc = locate(state.t); return loc ? 1 / loc.it.src.fps / loc.it.clip.speed : 1 / 30; }
+function seek(t) {
+  if (state.playing) pause();
+  state.t = clamp(t, 0, lay().total);
+  syncVideo(); updateHead(); renderContext();
+}
+
+/* 소리: 100%를 넘는 음량도 들어볼 수 있게 GainNode를 거친다 */
+let actx = null;
+function ensureAudio() {
+  try {
+    if (!actx) actx = new AudioContext();
+    if (actx.state === 'suspended') actx.resume();
+    for (const s of state.sources) {
+      if (!s.gain) { s.gain = actx.createGain(); actx.createMediaElementSource(s.video).connect(s.gain).connect(actx.destination); }
+    }
+  } catch (e) { console.info('미리보기 음량 조절을 쓸 수 없습니다:', e?.message || e); }
+}
+function applyClipAudio(it) {
+  const g = audible(it.clip) ? it.clip.volume : 0, v = it.src.video;
+  if (it.src.gain) { v.muted = false; v.volume = 1; it.src.gain.gain.value = g; }
+  else { v.muted = g === 0; v.volume = Math.min(1, g); }
+}
+const bgmEl = new Audio();
+bgmEl.preload = 'auto';
+function bgmSync() {
+  const f = state.bgmFile, b = doc.bgm;
+  if (!f || !b.on || !state.playing) { if (!bgmEl.paused) bgmEl.pause(); return; }
+  let pos = state.t;
+  if (b.loop && f.duration > 0) pos %= f.duration;
+  if (pos >= f.duration - 0.02) { if (!bgmEl.paused) bgmEl.pause(); return; }
+  bgmEl.volume = clamp(b.volume * (b.fade ? clamp((lay().total - state.t) / 2, 0, 1) : 1), 0, 1);
+  if (bgmEl.paused) { bgmEl.currentTime = pos; bgmEl.play().catch(() => {}); }
+  else if (Math.abs(bgmEl.currentTime - pos) > 0.35) bgmEl.currentTime = pos;
+}
+
+let playLoc = null;
+function enterClip(loc, seamless) {
+  playLoc = loc;
+  const { clip, src } = loc.it, v = src.video;
+  for (const s of state.sources) if (s !== src && !s.video.paused) s.video.pause();
+  v.playbackRate = clip.speed; v.preservesPitch = true;
+  applyClipAudio(loc.it);
+  if (!seamless && Math.abs(v.currentTime - loc.tSrc) > 0.04) v.currentTime = loc.tSrc;
+  if (v.paused) v.play().catch(() => {});
+}
+function play() {
+  const { items, total } = lay();
+  if (!items.length || state.exporting) return;
+  if (state.cropMode) setCropMode(false);
+  if (state.t >= total - 0.05) state.t = 0;
+  state.playing = true;
+  ensureAudio();
+  enterClip(locate(state.t));
+  $('btnPlay').textContent = '❚❚ 정지';
+  requestAnimationFrame(tick);
+}
+function pause() {
+  if (!state.playing) return;
+  state.playing = false; playLoc = null;
+  for (const s of state.sources) s.video.pause();
+  bgmEl.pause();
+  $('btnPlay').textContent = '▶ 재생';
+  syncVideo(); updateHead(); renderContext();
+}
+function togglePlay() { state.playing ? pause() : play(); }
+function tick() {
+  if (!state.playing || !playLoc) return;
+  const { it } = playLoc, v = it.src.video, clip = it.clip;
+  const ts = v.currentTime;
+  if (ts >= clip.end - 0.004 || v.ended) {
+    const next = lay().items[it.i + 1];
+    if (!next) { state.t = lay().total; pause(); return; }
+    // 같은 영상에서 바로 이어지는 조각이면 끊지 않고 그대로 재생한다
+    enterClip({ it: next, tSrc: next.clip.start }, next.src === it.src && Math.abs(next.clip.start - clip.end) < 0.02);
+    state.t = next.o0;
+  } else if (!v.seeking) state.t = clamp(it.o0 + (ts - clip.start) / clip.speed, it.o0, it.o1);
+  bgmSync(); updateHead(true); draw();
+  requestAnimationFrame(tick);
+}
+
+/* ───────────── 영상 불러오기 ───────────── */
+function loadInto(v, url) {
+  return new Promise((resolve, reject) => {
+    const done = ok => { v.onloadedmetadata = v.onerror = null; ok ? resolve() : reject(new Error('load')); };
+    v.onloadedmetadata = async () => {
+      // 브라우저로 녹화한 webm은 길이 정보가 없어 duration이 Infinity로 나온다. 끝으로 한 번 보내면 길이가 정해진다.
+      if (!isFinite(v.duration)) {
+        await new Promise(res => {
+          const on = () => { if (isFinite(v.duration)) { v.removeEventListener('durationchange', on); res(); } };
+          v.addEventListener('durationchange', on);
+          v.currentTime = 1e101;
+          setTimeout(() => { v.removeEventListener('durationchange', on); res(); }, 6000);
+        });
+        v.currentTime = 0;
+      }
+      done(true);
+    };
+    v.onerror = () => done(false);
+    v.src = url;
+  });
+}
+const hex = d => { if (!d) return ''; const u = d instanceof ArrayBuffer ? new Uint8Array(d) : new Uint8Array(d.buffer, d.byteOffset, d.byteLength); return Array.from(u, b => b.toString(16).padStart(2, '0')).join(''); };
+/* 형식 지문. 지문이 같은 영상끼리는 다시 인코딩하지 않고 그대로 이어 붙일 수 있다. */
+async function signature(vt, at) {
+  const vc = await vt.getDecoderConfig(), ac = at ? await at.getDecoderConfig() : null;
+  return JSON.stringify([vc?.codec, vc?.codedWidth, vc?.codedHeight, hex(vc?.description), await vt.getRotation(), ac?.codec, ac?.sampleRate, ac?.numberOfChannels, hex(ac?.description)]);
+}
+function setLoading(d) {
+  state.loading += d;
+  $('loading').hidden = state.loading <= 0;
+  $('loading').textContent = '영상을 불러오는 중…';
+}
+async function addVideo(file) {
+  const url = URL.createObjectURL(file);
+  const v = document.createElement('video');
+  v.preload = 'auto'; v.playsInline = true;
+  const fail = msg => { URL.revokeObjectURL(url); v.removeAttribute('src'); v.load(); toast(`${file.name}: ${msg}`, 7000); return null; };
+  try { await loadInto(v, url); } catch { return fail('이 브라우저에서 열 수 없는 영상입니다. mp4(H.264)로 바꿔서 넣어 주세요.'); }
+  if (!v.videoWidth) return fail('화면이 없는 파일입니다. 음악 파일은 "배경음악 넣기"로 넣어 주세요.');
+  let input, vTrack, aTrack;
+  try {
+    input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
+    vTrack = await input.getPrimaryVideoTrack(); aTrack = await input.getPrimaryAudioTrack();
+  } catch { vTrack = null; }
+  if (!vTrack) return fail('파일 구조를 읽을 수 없습니다. mp4·mov·webm 영상만 편집할 수 있습니다.');
+  const src = { id: ++seq.src, file, name: file.name, url, video: v, input, vTrack, aTrack, crop: null, rot: 0, thumbs: [], thumbStep: 1, gain: null };
+  try {
+    src.w = await vTrack.getDisplayWidth(); src.h = await vTrack.getDisplayHeight();
+    let end = await vTrack.computeDuration();
+    if (!(end > 0)) end = v.duration;
+    src.duration = end;
+    const stats = await vTrack.computePacketStats(120);
+    src.fps = clamp(stats.averagePacketRate || 30, 1, 120);
+    src.canDecode = await vTrack.canDecode();
+    src.vCodec = await vTrack.getCodec();
+    src.hasAudio = !!aTrack;
+    src.aCodec = aTrack ? await aTrack.getCodec() : null;
+    src.aDecodable = aTrack ? await aTrack.canDecode() : false;
+    src.sig = await signature(vTrack, aTrack);
+  } catch (e) { console.info(e); return fail('영상 정보를 읽는 데 실패했습니다.'); }
+  if (!(src.duration > CFG.MIN_CLIP * 2)) return fail('너무 짧은 영상입니다.');
+  v.addEventListener('seeked', () => {
+    if (!state.playing && v._want != null && Math.abs(v.currentTime - v._want) > 1e-3) v.currentTime = v._want;
+    invalidate();
+  });
+  v.addEventListener('loadeddata', invalidate);
+  v.addEventListener('canplay', invalidate);
+  state.sources.push(src);
+  if (src.hasAudio && !src.aDecodable) notice('adec', `"${src.name}"의 소리 형식(${src.aCodec || '알 수 없음'})은 이 브라우저가 풀 수 없습니다. "빠른 저장"으로는 소리가 그대로 들어가지만 "새로 만들기"로 저장하면 이 영상의 소리가 빠집니다.`);
+  if (!src.canDecode) notice('vdec', `"${src.name}"은 이 브라우저에서 "빠른 저장"만 할 수 있습니다(자막·배속·화면 자르기는 저장되지 않음).`);
+  makeThumbs(src);
+  return src;
+}
+function appendClip(src) {
+  doc.clips.push({ id: ++seq.clip, srcId: src.id, start: 0, end: src.duration, speed: 1, volume: 1, muted: false });
+}
+async function addFiles(files) {
+  if (state.exporting) return;
+  files = [...files];
+  if (!files.length) return;
+  const isAudio = f => /^audio\//.test(f.type) || /\.(mp3|m4a|wav|ogg|flac|aac)$/i.test(f.name);
+  const audio = files.find(isAudio), videos = files.filter(f => !isAudio(f));
+  setLoading(1);
+  let added = 0;
+  try {
+    for (const f of videos.sort((a, b) => a.name.localeCompare(b.name, 'ko', { numeric: true }))) {
+      const src = await addVideo(f);
+      if (src) { appendClip(src); added++; }
+    }
+  } finally { setLoading(-1); }
+  if (added) commit();
+  if (audio) await setBgm(audio);
+}
+
+/* 타임라인에 깔 작은 그림. 키프레임만 골라 풀기 때문에 긴 영상도 금방 끝난다. */
+async function makeThumbs(src) {
+  if (!src.canDecode) return;
+  try {
+    const n = clamp(Math.ceil(src.duration / 2), 1, CFG.THUMB_MAX);
+    src.thumbStep = src.duration / n;
+    const ps = new EncodedPacketSink(src.vTrack), slots = [];
+    for (let i = 0; i < n; i++) {
+      const key = await ps.getKeyPacket(i * src.thumbStep, { metadataOnly: true });
+      const t = key ? key.timestamp : i * src.thumbStep;
+      const last = slots[slots.length - 1];
+      if (last && Math.abs(last.t - t) < 1e-6) last.n++; else slots.push({ i, t, n: 1 });
+    }
+    const sink = new CanvasSink(src.vTrack, { height: CFG.THUMB_H * 2, fit: 'contain' });
+    let k = 0, lastDraw = 0;
+    for await (const wc of sink.canvasesAtTimestamps(slots.map(s => s.t))) {
+      const s = slots[k++];
+      if (wc) for (let j = 0; j < s.n; j++) src.thumbs[s.i + j] = wc.canvas;
+      while (state.exporting) await new Promise(r => setTimeout(r, 500));   // 내보내는 동안에는 디코더를 양보한다
+      if (performance.now() - lastDraw > 400) { lastDraw = performance.now(); drawTL(); }
+    }
+    drawTL();
+  } catch (e) { console.info('타임라인 그림을 만들지 못했습니다:', e?.message || e); }
+}
+
+async function setBgm(file) {
+  let input, track, duration;
+  try {
+    input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
+    track = await input.getPrimaryAudioTrack();
+    if (!track || !(await track.canDecode())) throw new Error('decode');
+    duration = await track.computeDuration();
+    if (!(duration > 0.2)) throw new Error('short');
+  } catch { toast(`${file.name}: 이 브라우저에서 쓸 수 없는 음악 파일입니다. mp3나 m4a로 넣어 주세요.`, 6000); return; }
+  if (state.bgmFile) URL.revokeObjectURL(state.bgmFile.url);
+  const url = URL.createObjectURL(file);
+  state.bgmFile = { file, name: file.name, url, duration, input, track };
+  bgmEl.src = url;
+  doc.bgm.on = true;
+  commit();
+}
+
+/* ───────────── 편집 동작 ───────────── */
+function selectClip(id) { state.selClip = id; state.selText = null; renderSide(); drawTL(); invalidate(); }
+function selectText(id) { state.selText = id; if (id != null) state.selClip = null; renderSide(); drawTL(); invalidate(); }
+function splitAtHead() {
+  const loc = locate(state.t); if (!loc) return;
+  const c = loc.it.clip, m = CFG.MIN_CLIP * c.speed;
+  if (loc.tSrc - c.start < m || c.end - loc.tSrc < m) return toast('조각의 맨 처음이나 맨 끝에서는 나눌 수 없습니다.');
+  const b = { ...c, id: ++seq.clip, start: loc.tSrc };
+  c.end = loc.tSrc;
+  doc.clips.splice(loc.it.i + 1, 0, b);
+  state.selClip = b.id; state.selText = null;
+  commit();
+}
+function trimAtHead(side) {
+  const loc = locate(state.t); if (!loc) return;
+  const c = loc.it.clip, m = CFG.MIN_CLIP * c.speed;
+  if (side === 'l') {
+    if (c.end - loc.tSrc < m) return toast('남는 부분이 너무 짧습니다.');
+    if (loc.tSrc - c.start < 1e-3) return;
+    c.start = loc.tSrc; state.t = loc.it.o0;
+  } else {
+    if (loc.tSrc - c.start < m) return toast('남는 부분이 너무 짧습니다.');
+    if (c.end - loc.tSrc < 1e-3) return;
+    c.end = loc.tSrc;
+  }
+  state.selClip = c.id; state.selText = null;
+  commit();
+}
+function deleteSelected() {
+  if (state.selText != null) {
+    doc.texts = doc.texts.filter(t => t.id !== state.selText); state.selText = null;
+    return commit();
+  }
+  const c = clipById(state.selClip);
+  if (!c) return toast('지울 조각이나 자막을 타임라인에서 먼저 눌러 주세요.');
+  const it = lay().items.find(x => x.clip === c);
+  doc.clips = doc.clips.filter(x => x !== c);
+  state.selClip = null; state.t = it.o0;
+  commit();
+}
+function moveClip(dir) {
+  const c = clipById(state.selClip); if (!c) return;
+  const i = doc.clips.indexOf(c), j = i + dir;
+  if (j < 0 || j >= doc.clips.length) return;
+  doc.clips.splice(i, 1); doc.clips.splice(j, 0, c);
+  LAY = null; state.t = lay().items[j].o0;
+  commit();
+}
+function addText() {
+  const loc = locate(state.t); if (!loc) return;
+  const src = loc.it.src, start = Math.min(loc.tSrc, src.duration - CFG.MIN_TEXT);
+  const tx = { id: ++seq.text, srcId: src.id, start, end: Math.min(src.duration, start + CFG.TEXT_SEC * loc.it.clip.speed), text: '자막', x: 0.5, y: TEXT_POS.bot, size: 'm', style: 'outline' };
+  doc.texts.push(tx);
+  state.selText = tx.id; state.selClip = null;
+  commit();
+  const ta = $('textVal'); ta.focus(); ta.select();
+}
+/* 화면에 실제로 나오는 자막 조각들. 한 자막이 여러 조각에 걸치면 조각마다 하나씩 나온다. */
+function textPieces() {
+  const out = [];
+  for (const it of lay().items) for (const tx of doc.texts) {
+    if (tx.srcId !== it.src.id) continue;
+    const a = Math.max(tx.start, it.clip.start), b = Math.min(tx.end, it.clip.end);
+    if (b - a > 1e-6) out.push({ tx, it, o0: it.o0 + (a - it.clip.start) / it.clip.speed, o1: it.o0 + (b - it.clip.start) / it.clip.speed });
+  }
+  return out;
+}
+
+/* ───────────── 화면 자르기 ───────────── */
+const getCrop = () => curSrc()?.crop || null;
+function setCrop(c) { const s = curSrc(); if (!s) return; s.crop = c; renderCrop(); }
+function ratioK() {   // 0~1 좌표에서 w = h * k
+  const s = curSrc();
+  if (state.ratio === 'free' || !s) return 0;
+  const [a, b] = state.ratio.split(':').map(Number), d = dispSize(s);
+  return (a / b) * d.h / d.w;
+}
+const MINC = 0.05;
+function rectFrom(a, p) {
+  let w = Math.abs(p.x - a.x), h = Math.abs(p.y - a.y);
+  const sx = p.x >= a.x ? 1 : -1, sy = p.y >= a.y ? 1 : -1;
+  const k = ratioK();
+  if (k) {
+    if (w / k > h) h = w / k; else w = h * k;
+    const maxW = sx > 0 ? 1 - a.x : a.x, maxH = sy > 0 ? 1 - a.y : a.y;
+    if (w > maxW) { w = maxW; h = w / k; }
+    if (h > maxH) { h = maxH; w = h * k; }
+  } else { w = Math.max(w, MINC); h = Math.max(h, MINC); }
+  return { x: clamp(sx > 0 ? a.x : a.x - w, 0, 1 - w), y: clamp(sy > 0 ? a.y : a.y - h, 0, 1 - h), w, h };
+}
+function applyRatio() {
+  const k = ratioK(); if (!k) return renderCrop();
+  const c = getCrop() || { x: 0, y: 0, w: 1, h: 1 };
+  let w = c.w, h = w / k;
+  if (h > c.h) { h = c.h; w = h * k; }
+  setCrop({ x: c.x + (c.w - w) / 2, y: c.y + (c.h - h) / 2, w, h });
+  commit();
+}
+function renderCrop() {
+  const s = curSrc(), c = s && state.cropMode ? s.crop : null, r = $('cropRect');
+  $('cropLayer').hidden = !state.cropMode; $('cropHint').hidden = !state.cropMode || !!c;
+  r.hidden = !c;
+  r.classList.toggle('locked', state.ratio !== 'free');
+  if (c) {
+    r.style.left = c.x * 100 + '%'; r.style.top = c.y * 100 + '%'; r.style.width = c.w * 100 + '%'; r.style.height = c.h * 100 + '%';
+    r.classList.toggle('top0', c.y < 0.07);
+    const z = croppedSize(s);
+    $('cropSize').textContent = `${Math.round(z.w)}×${Math.round(z.h)}`;
+  }
+}
+function setCropMode(on) {
+  if (on && state.playing) pause();
+  state.cropMode = on && !!curSrc();
+  layoutStage(); renderCrop(); renderSide(); invalidate();
+}
+$('cropLayer').addEventListener('pointerdown', ev => {
+  if (ev.button !== 0 || !curSrc()) return;
+  const layer = $('cropLayer'), box = layer.getBoundingClientRect();
+  const P = e => ({ x: clamp((e.clientX - box.left) / box.width, 0, 1), y: clamp((e.clientY - box.top) / box.height, 0, 1) });
+  const p0 = P(ev), c0 = getCrop(), hd = ev.target.dataset.h;
+  const mode = hd && c0 ? 'resize' : (ev.target.closest('#cropRect') && c0) ? 'move' : 'new';
+  layer.setPointerCapture(ev.pointerId); ev.preventDefault();
+  let moved = false;
+  const move = e => {
+    const p = P(e); let c = null;
+    if (mode === 'new') {
+      if (Math.abs(p.x - p0.x) < 0.012 && Math.abs(p.y - p0.y) < 0.012) return;
+      c = rectFrom(p0, p);
+    } else if (mode === 'move') {
+      c = { ...c0, x: clamp(c0.x + p.x - p0.x, 0, 1 - c0.w), y: clamp(c0.y + p.y - p0.y, 0, 1 - c0.h) };
+    } else if (ratioK()) {
+      c = rectFrom({ x: hd.includes('w') ? c0.x + c0.w : c0.x, y: hd.includes('n') ? c0.y + c0.h : c0.y }, p);
+    } else {
+      let x1 = c0.x, y1 = c0.y, x2 = c0.x + c0.w, y2 = c0.y + c0.h;
+      if (hd.includes('w')) x1 = Math.min(p.x, x2 - MINC);
+      if (hd.includes('e')) x2 = Math.max(p.x, x1 + MINC);
+      if (hd.includes('n')) y1 = Math.min(p.y, y2 - MINC);
+      if (hd.includes('s')) y2 = Math.max(p.y, y1 + MINC);
+      c = { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+    }
+    if (c) { setCrop(c); moved = true; }
+  };
+  const up = () => {
+    layer.removeEventListener('pointermove', move); layer.removeEventListener('pointerup', up); layer.removeEventListener('pointercancel', up);
+    if (moved) commit();
+  };
+  layer.addEventListener('pointermove', move); layer.addEventListener('pointerup', up); layer.addEventListener('pointercancel', up);
+});
+function rotateSrc() {
+  const s = curSrc(); if (!s) return;
+  const c = s.crop;
+  s.rot = (s.rot + 90) % 360;
+  if (c) s.crop = { x: 1 - c.y - c.h, y: c.x, w: c.h, h: c.w };    // 자른 영역도 같이 돌린다
+  commit();
+}
+
+/* 미리보기 위에서 자막을 끌어 옮긴다. 자막이 아닌 곳을 누르면 재생/정지. */
+cv.addEventListener('pointerdown', ev => {
+  if (ev.button !== 0 || state.cropMode) return;
+  const r = cv.getBoundingClientRect(), k = pv.W / r.width;
+  const P = e => ({ x: (e.clientX - r.left) * k, y: (e.clientY - r.top) * k });
+  const p0 = P(ev);
+  const box = [...pv.boxes].reverse().find(b => p0.x >= b.x && p0.x <= b.x + b.w && p0.y >= b.y && p0.y <= b.y + b.h);
+  if (!box) return togglePlay();
+  if (state.playing) pause();
+  const tx = textById(box.id); if (!tx) return;
+  selectText(tx.id);
+  cv.setPointerCapture(ev.pointerId); ev.preventDefault();
+  const cx0 = (box.x + box.w / 2) / pv.W, cy0 = (box.y + box.h / 2) / pv.H;
+  let moved = false;
+  const move = e => {
+    const p = P(e);
+    if (!moved && Math.hypot(p.x - p0.x, p.y - p0.y) < 4) return;
+    moved = true;
+    tx.x = clamp(cx0 + (p.x - p0.x) / pv.W, 0, 1); tx.y = clamp(cy0 + (p.y - p0.y) / pv.H, 0, 1);
+    invalidate();
+  };
+  const up = () => {
+    cv.removeEventListener('pointermove', move); cv.removeEventListener('pointerup', up); cv.removeEventListener('pointercancel', up);
+    if (moved) commit();
+  };
+  cv.addEventListener('pointermove', move); cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+});
+
+/* ───────────── 타임라인 ─────────────
+   긴 영상에서도 가볍도록 보이는 범위만 캔버스 한 장에 그린다. 가로 스크롤은 빈 막대(#tlSpacer)가 만든다. */
+const TL = { PAD: 12, RULER: 20, CLIP_Y: 22, CLIP_H: CFG.THUMB_H, TEXT_Y: 84, TEXT_H: 22, BGM_Y: 112, BGM_H: 8, H: 132 };
+const COLORS = ['#2f80ed', '#e8833a', '#27ae60', '#9b51e0', '#eb5757', '#00a3a3', '#b8930a', '#d6409f'];
+const tlScroll = $('tlScroll'), tlCv = $('tlCv'), tlCtx = tlCv.getContext('2d');
+let tlDrag = null;    // 조각 앞쪽을 다듬는 동안의 화면 보정 { i, gap }
+const tlShift = i => (tlDrag && i >= tlDrag.i ? tlDrag.gap * state.pps : 0);
+const xOf = t => TL.PAD + t * state.pps - tlScroll.scrollLeft;
+const tOf = x => (x - TL.PAD + tlScroll.scrollLeft) / state.pps;
+function fitPps() { const { total } = lay(); return total > 0 ? Math.max(0.01, (tlScroll.clientWidth - TL.PAD * 2) / total) : 20; }
+function sizeTL() {
+  if (state.fit) state.pps = fitPps();
+  else state.pps = clamp(state.pps, fitPps(), Math.max(fitPps(), CFG.MAX_PPS));
+  $('tlSpacer').style.width = Math.ceil(lay().total * state.pps + TL.PAD * 2) + 'px';
+}
+function setPps(p) {
+  const min = fitPps(), ax = xOf(state.t);
+  state.fit = p <= min * 1.001;
+  state.pps = clamp(p, min, Math.max(min, CFG.MAX_PPS));
+  sizeTL();
+  tlScroll.scrollLeft = TL.PAD + state.t * state.pps - clamp(ax, 40, tlScroll.clientWidth - 40);
+  drawTL(); updateHead();
+}
+function updateHead(follow) {
+  const { total } = lay();
+  $('timeLbl').textContent = `${fmtTime(state.t)} / ${fmtTime(total)}`;
+  let x = xOf(state.t) + (tlDrag ? tlShift(tlDrag.i) : 0);
+  if (follow && (x > tlScroll.clientWidth - 30 || x < 0)) {     // 재생 중에는 재생 위치를 따라간다
+    tlScroll.scrollLeft = Math.max(0, TL.PAD + state.t * state.pps - 60);
+    x = xOf(state.t);
+  }
+  const h = $('tlHead');
+  h.style.display = x < -2 || x > tlScroll.clientWidth + 2 ? 'none' : 'block';
+  h.style.transform = `translateX(${x - 1}px)`;
+}
+function pill(ctx, x, y, text, bg) {
+  ctx.font = '600 11px system-ui, sans-serif';
+  const w = ctx.measureText(text).width + 10;
+  ctx.fillStyle = bg; ctx.beginPath(); ctx.roundRect(x, y, w, 16, 4); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.fillText(text, x + 5, y + 8.5);
+  return w + 4;
+}
+function drawTL() {
+  const W = tlScroll.clientWidth, H = TL.H, dpr = window.devicePixelRatio || 1;
+  if (!W) return;
+  if (tlCv.width !== Math.round(W * dpr) || tlCv.height !== Math.round(H * dpr)) { tlCv.width = Math.round(W * dpr); tlCv.height = Math.round(H * dpr); }
+  const ctx = tlCtx, pps = state.pps, { items, total } = lay();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  // 눈금
+  const step = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800].find(s => s * pps >= 70) || 3600;
+  ctx.font = '10px ui-monospace, Consolas, monospace'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  ctx.fillStyle = '#657282'; ctx.strokeStyle = '#c9d1db'; ctx.lineWidth = 1;
+  for (let t = Math.max(0, Math.floor(tOf(0) / step) * step); t <= Math.min(total, tOf(W)); t += step) {
+    const x = Math.round(xOf(t)) + 0.5;
+    ctx.beginPath(); ctx.moveTo(x, 2); ctx.lineTo(x, TL.RULER); ctx.stroke();
+    ctx.fillText(step < 1 ? fmtTime(t) : fmtClock(t), x + 4, 10);
+  }
+  // 줄 바탕
+  ctx.fillStyle = '#edf0f4';
+  ctx.beginPath(); ctx.roundRect(4, TL.CLIP_Y - 2, W - 8, TL.CLIP_H + 4, 6); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(4, TL.TEXT_Y - 2, W - 8, TL.TEXT_H + 4, 6); ctx.fill();
+  // 조각
+  const many = new Set(doc.clips.map(c => c.srcId)).size > 1;
+  for (const it of items) {
+    const sh = tlShift(it.i), x0 = xOf(it.o0) + sh, x1 = xOf(it.o1) + sh;
+    if (x1 < -2 || x0 > W + 2) continue;
+    const w = Math.max(2, x1 - x0 - 1), y = TL.CLIP_Y, h = TL.CLIP_H, src = it.src, sel = it.clip.id === state.selClip;
+    ctx.save();
+    ctx.beginPath(); ctx.roundRect(x0, y, w, h, 5); ctx.clip();
+    ctx.fillStyle = COLORS[(src.id - 1) % COLORS.length]; ctx.fillRect(x0, y, w, h);
+    if (src.thumbs.length) {
+      const tw = h * src.w / src.h;
+      for (let x = Math.max(x0, x0 + Math.floor((-x0) / tw) * tw); x < Math.min(x1, W); x += tw) {
+        const ts = it.clip.start + ((x + tw / 2 - x0) / pps) * it.clip.speed;
+        const c = src.thumbs[clamp(Math.floor(ts / src.thumbStep), 0, src.thumbs.length - 1)];
+        if (c) ctx.drawImage(c, x, y, tw, h);
+      }
+    }
+    const g = ctx.createLinearGradient(0, y, 0, y + 22);
+    g.addColorStop(0, 'rgba(0, 0, 0, .6)'); g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = g; ctx.fillRect(x0, y, w, 22);
+    ctx.font = '600 11px system-ui, sans-serif'; ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+    const lx = Math.max(x0, 0) + 6;
+    ctx.fillText(`${it.i + 1}${many ? ' · ' + src.name : ''}`, lx, y + 10);
+    let bx = lx;
+    if (it.clip.speed !== 1) bx += pill(ctx, bx, y + h - 20, `${it.clip.speed}배속`, 'rgba(23, 105, 224, .92)');
+    if (it.clip.muted || it.clip.volume === 0) bx += pill(ctx, bx, y + h - 20, '소리 끔', 'rgba(60, 70, 82, .92)');
+    else if (it.clip.volume !== 1) bx += pill(ctx, bx, y + h - 20, `소리 ${Math.round(it.clip.volume * 100)}%`, 'rgba(60, 70, 82, .92)');
+    ctx.restore();
+    ctx.beginPath(); ctx.roundRect(x0 + 0.5, y + 0.5, w - 1, h - 1, 5);
+    ctx.lineWidth = sel ? 2.5 : 1; ctx.strokeStyle = sel ? '#ffd500' : 'rgba(0, 0, 0, .35)'; ctx.stroke();
+    if (sel && w > 20) {      // 양 끝 손잡이
+      ctx.fillStyle = '#ffd500';
+      ctx.beginPath(); ctx.roundRect(x0, y + 14, 5, h - 28, 2); ctx.fill();
+      ctx.beginPath(); ctx.roundRect(x0 + w - 5, y + 14, 5, h - 28, 2); ctx.fill();
+    }
+  }
+  // 자막
+  ctx.font = '600 11px system-ui, sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  for (const p of textPieces()) {
+    const sh = tlShift(p.it.i), x0 = xOf(p.o0) + sh, x1 = xOf(p.o1) + sh;
+    if (x1 < 0 || x0 > W) continue;
+    const w = Math.max(3, x1 - x0), sel = p.tx.id === state.selText;
+    ctx.save();
+    ctx.beginPath(); ctx.roundRect(x0, TL.TEXT_Y, w, TL.TEXT_H, 4); ctx.clip();
+    ctx.fillStyle = sel ? '#6b3fd4' : '#8e6be0'; ctx.fillRect(x0, TL.TEXT_Y, w, TL.TEXT_H);
+    ctx.fillStyle = '#fff'; ctx.fillText(p.tx.text.replace(/\n/g, ' '), Math.max(x0, 0) + 6, TL.TEXT_Y + TL.TEXT_H / 2 + 0.5);
+    ctx.restore();
+    if (sel) { ctx.beginPath(); ctx.roundRect(x0 + 0.5, TL.TEXT_Y + 0.5, w - 1, TL.TEXT_H - 1, 4); ctx.lineWidth = 2; ctx.strokeStyle = '#ffd500'; ctx.stroke(); }
+  }
+  if (!doc.texts.length && items.length) { ctx.fillStyle = '#98a3b0'; ctx.font = '11px system-ui, sans-serif'; ctx.fillText('자막 (T를 누르면 재생 위치에 추가)', 12, TL.TEXT_Y + TL.TEXT_H / 2 + 0.5); }
+  // 배경음악
+  if (state.bgmFile && doc.bgm.on && total > 0) {
+    const end = doc.bgm.loop ? total : Math.min(total, state.bgmFile.duration);
+    const x0 = Math.max(0, xOf(0)), x1 = Math.min(W, xOf(end));
+    if (x1 > x0) { ctx.fillStyle = '#27ae60'; ctx.beginPath(); ctx.roundRect(x0, TL.BGM_Y, x1 - x0, TL.BGM_H, 4); ctx.fill(); }
+  }
+}
+function hitTL(x, y) {
+  const { items } = lay();
+  if (y >= TL.CLIP_Y - 2 && y < TL.CLIP_Y + TL.CLIP_H + 2) {
+    let best = null;
+    for (const it of items) {
+      const x0 = xOf(it.o0), x1 = xOf(it.o1), sel = it.clip.id === state.selClip;
+      if (x1 - x0 < 18 && !sel) continue;
+      // 조각 안쪽에 있을 때 그 조각의 끝을 먼저 잡는다
+      for (const [side, ex, inside] of [['l', x0, x >= x0], ['r', x1, x <= x1]]) {
+        const d = Math.abs(x - ex);
+        if (d <= 6) { const score = d + (inside ? 0 : 3) - (sel ? 6 : 0); if (!best || score < best.score) best = { type: 'trim', it, side, score }; }
+      }
+    }
+    if (best) return best;
+    const it = items.find(i => x >= xOf(i.o0) && x < xOf(i.o1));
+    if (it) return { type: 'clip', it };
+  }
+  if (y >= TL.TEXT_Y - 2 && y < TL.TEXT_Y + TL.TEXT_H + 2) {
+    const ps = textPieces().reverse();
+    const p = ps.find(q => q.tx.id === state.selText && x >= xOf(q.o0) - 3 && x <= xOf(q.o1) + 3) || ps.find(q => x >= xOf(q.o0) && x <= xOf(q.o1));
+    if (p) {
+      const x0 = xOf(p.o0), x1 = xOf(p.o1);
+      if (x1 - x0 > 14 && x - x0 <= 5) return { type: 'textTrim', p, side: 'l' };
+      if (x1 - x0 > 14 && x1 - x <= 5) return { type: 'textTrim', p, side: 'r' };
+      return { type: 'text', p };
+    }
+  }
+  return { type: 'scrub' };
+}
+tlCv.addEventListener('pointermove', ev => {
+  if (ev.buttons) return;
+  const r = tlCv.getBoundingClientRect(), hit = hitTL(ev.clientX - r.left, ev.clientY - r.top);
+  tlCv.style.cursor = hit.type === 'trim' || hit.type === 'textTrim' ? 'ew-resize' : hit.type === 'text' ? 'grab' : 'pointer';
+});
+tlCv.addEventListener('pointerdown', ev => {
+  if (ev.button !== 0 || !doc.clips.length || state.exporting) return;
+  const r = tlCv.getBoundingClientRect(), P = e => ({ x: e.clientX - r.left, y: e.clientY - r.top });
+  const p0 = P(ev), hit = hitTL(p0.x, p0.y);
+  tlCv.setPointerCapture(ev.pointerId); ev.preventDefault();
+  if (state.playing) pause();
+  if (state.cropMode) setCropMode(false);
+  let move = null, done = null;
+  if (hit.type === 'trim') {
+    const { clip, src, i } = hit.it, s0 = clip.start, e0 = clip.end, min = CFG.MIN_CLIP * clip.speed;
+    state.selClip = clip.id; state.selText = null;
+    let moved = false;
+    move = e => {
+      const dt = (P(e).x - p0.x) / state.pps * clip.speed;
+      if (!moved && Math.abs(P(e).x - p0.x) < 2) return;
+      moved = true; LAY = null;
+      if (hit.side === 'l') { clip.start = clamp(s0 + dt, 0, e0 - min); tlDrag = { i, gap: (clip.start - s0) / clip.speed }; state.t = lay().items[i].o0; }
+      else { clip.end = clamp(e0 + dt, s0 + min, src.duration); state.t = Math.max(0, lay().items[i].o1 - 0.001); }
+      syncVideo(); updateHead(); drawTL(); renderSide();
+    };
+    done = () => { tlDrag = null; if (moved) commit(); else { renderSide(); drawTL(); } };
+  } else if (hit.type === 'text' || hit.type === 'textTrim') {
+    const { tx, it } = hit.p, s0 = tx.start, e0 = tx.end, o0 = hit.p.o0;
+    selectText(tx.id);
+    let moved = false;
+    move = e => {
+      const x = P(e).x;
+      if (!moved && Math.abs(x - p0.x) < 3) return;
+      moved = true;
+      if (hit.type === 'text') {       // 통째로 옮기기: 놓인 자리의 조각(원본)에 다시 붙인다
+        const loc = locate(clamp(o0 + (x - p0.x) / state.pps, 0, lay().total - 0.01));
+        const S = loc.it.src, len = e0 - s0;
+        tx.srcId = S.id; tx.start = clamp(loc.tSrc, 0, S.duration - CFG.MIN_TEXT); tx.end = Math.min(S.duration, tx.start + len);
+      } else {
+        const ts = it.clip.start + (tOf(x) - it.o0) * it.clip.speed;
+        if (hit.side === 'l') tx.start = clamp(ts, 0, e0 - CFG.MIN_TEXT); else tx.end = clamp(ts, s0 + CFG.MIN_TEXT, it.src.duration);
+      }
+      drawTL(); invalidate(); renderSide();
+    };
+    done = () => { if (moved) commit(); };
+  } else {
+    if (hit.type === 'clip') { state.selClip = hit.it.clip.id; state.selText = null; }
+    else { state.selText = null; }
+    seek(tOf(p0.x)); renderSide(); drawTL();
+    move = e => seek(tOf(P(e).x));
+  }
+  const up = () => {
+    tlCv.removeEventListener('pointermove', move); tlCv.removeEventListener('pointerup', up); tlCv.removeEventListener('pointercancel', up);
+    done?.();
+  };
+  tlCv.addEventListener('pointermove', move); tlCv.addEventListener('pointerup', up); tlCv.addEventListener('pointercancel', up);
+});
+tlScroll.addEventListener('scroll', () => { drawTL(); updateHead(); });
+tlScroll.addEventListener('wheel', ev => {
+  if (!ev.ctrlKey && !ev.metaKey) return;
+  ev.preventDefault();
+  setPps(state.pps * (ev.deltaY < 0 ? 1.25 : 0.8));
+}, { passive: false });
+
+/* ───────────── 옆 패널 ───────────── */
+function setSeg(id, v) { for (const b of $(id).children) b.classList.toggle('on', b.dataset.v === v); }
+function renderSide() {
+  const { items } = lay(), has = items.length > 0;
+  // 조각
+  const clip = clipById(state.selClip), it = clip && items.find(x => x.clip === clip);
+  $('clipHint').hidden = !!it || !has; $('clipBody').hidden = !it;
+  $('clipInfo').textContent = it ? `${it.i + 1}번 · ${fmtTime(it.o1 - it.o0)} · ${it.src.name}` : '';
+  if (it) {
+    $('clipSpeed').value = String(clip.speed);
+    $('clipVol').value = Math.round(clip.volume * 100); $('clipVolOut').textContent = Math.round(clip.volume * 100) + '%';
+    $('clipMute').checked = clip.muted;
+    $('clipVol').disabled = clip.muted || !it.src.hasAudio; $('clipMute').disabled = !it.src.hasAudio;
+    $('clipLeft').disabled = it.i === 0; $('clipRight').disabled = it.i === items.length - 1;
+  }
+  // 자막
+  const tx = textById(state.selText), pieces = textPieces();
+  $('btnText').disabled = !has;
+  $('textBody').hidden = !tx;
+  $('textInfo').textContent = doc.texts.length ? `${doc.texts.length}개` : '';
+  if (tx) {
+    const ta = $('textVal'); if (document.activeElement !== ta) ta.value = tx.text;
+    setSeg('textPos', Object.keys(TEXT_POS).find(k => Math.abs(TEXT_POS[k] - tx.y) < 0.005 && Math.abs(tx.x - 0.5) < 0.005) || '');
+    setSeg('textSize', tx.size);
+    $('textStyle').value = tx.style;
+    const p = pieces.find(q => q.tx === tx);
+    $('textLen').textContent = p ? `${fmtTime(p.o0)}부터 ${(p.o1 - p.o0).toFixed(1)}초` : '잘려 나간 곳에 있어 보이지 않습니다';
+  }
+  const list = $('textList'); list.textContent = '';
+  const firstAt = t => pieces.find(q => q.tx === t);
+  for (const t of [...doc.texts].sort((a, b) => (firstAt(a)?.o0 ?? Infinity) - (firstAt(b)?.o0 ?? Infinity))) {
+    const p = firstAt(t);
+    const li = el('li', { class: 'pick' + (t.id === state.selText ? ' sel' : '') + (p ? '' : ' off') },
+      el('small', { text: p ? fmtClock(p.o0) : '숨음' }), el('span', { class: 'nm', text: t.text.replace(/\n/g, ' ') || '(빈 자막)' }));
+    li.onclick = () => { if (p) seek(p.o0 + 0.01); selectText(t.id); };
+    list.append(li);
+  }
+  // 화면
+  const src = curSrc();
+  $('btnCrop').disabled = !src; $('btnRot').disabled = !src;
+  $('btnCrop').classList.toggle('on', state.cropMode);
+  $('btnCrop').textContent = state.cropMode ? '자르기 마치기' : '화면 자르기';
+  $('cropRow').hidden = !state.cropMode;
+  $('ratio').value = state.ratio;
+  $('btnCropReset').disabled = !src?.crop;
+  if (src) {
+    const z = croppedSize(src), multi = state.sources.length > 1;
+    $('frameInfo').textContent = `${Math.round(z.w)}×${Math.round(z.h)}`;
+    $('frameHint').textContent = (src.crop || src.rot ? '자르기·돌리기는 ' : '자르기와 돌리기는 ') + (multi ? `"${src.name}"에서 가져온 모든 조각에 적용됩니다.` : '영상 전체에 적용됩니다.');
+  } else { $('frameInfo').textContent = ''; $('frameHint').textContent = ''; }
+  // 소리
+  $('muteAll').checked = doc.muteAll;
+  const bf = state.bgmFile, bon = !!bf && doc.bgm.on;
+  $('bgmBody').hidden = !bon; $('btnBgmDel').hidden = !bon;
+  $('btnBgm').textContent = bon ? '다른 음악으로 바꾸기' : '배경음악 넣기';
+  if (bon) {
+    $('bgmName').textContent = `${bf.name} · ${fmtTime(bf.duration)}`;
+    $('bgmVol').value = Math.round(doc.bgm.volume * 100); $('bgmVolOut').textContent = Math.round(doc.bgm.volume * 100) + '%';
+    $('bgmLoop').checked = doc.bgm.loop; $('bgmFade').checked = doc.bgm.fade;
+  }
+  // 파일
+  const fl = $('fileList'); fl.textContent = '';
+  $('fileHint').hidden = state.sources.length > 0;
+  for (const s of state.sources) {
+    const used = doc.clips.filter(c => c.srcId === s.id).length;
+    const b = el('button', { class: 'btn xs', type: 'button', text: '끝에 넣기', title: '이 영상 전체를 맨 뒤에 다시 넣습니다' });
+    b.onclick = () => { appendClip(s); commit(); };
+    fl.append(el('li', { class: used ? '' : 'off' }, el('span', { class: 'nm', text: s.name, title: s.name }), el('small', { text: `${fmtClock(s.duration)} · ${fmtMB(s.file.size)}` }), b));
+  }
+  $('btnUndo').disabled = hist.idx <= 0; $('btnRedo').disabled = hist.idx >= hist.stack.length - 1;
+  $('btnExport').disabled = $('btnExport2').disabled = !has;
+}
+/* 재생 위치가 다른 영상으로 넘어갔을 때 '화면' 칸만 다시 맞춘다 */
+let ctxSrc = null;
+function renderContext() {
+  const s = curSrc();
+  if (s !== ctxSrc) { ctxSrc = s; if (state.cropMode) { layoutStage(); renderCrop(); } renderSide(); }
+}
+function renderAll() {
+  const has = doc.clips.length > 0;
+  $('empty').hidden = has;
+  $('vbox').hidden = !has; $('tools').hidden = !has; $('tlwrap').hidden = !has;
+  ctxSrc = curSrc();
+  layoutStage(); sizeTL(); drawTL(); renderCrop(); renderSide(); updateHead();
+  syncVideo(); invalidate();
+}
+new ResizeObserver(() => { layoutStage(); sizeTL(); drawTL(); updateHead(); invalidate(); }).observe($('stage'));
+
+/* ───────────── 소리 처리 (새로 만들 때) ───────────── */
+function planar(s) {
+  const out = [];
+  for (let c = 0; c < s.numberOfChannels; c++) { const a = new Float32Array(s.numberOfFrames); s.copyTo(a, { planeIndex: c, format: 'f32-planar' }); out.push(a); }
+  return out;
+}
+function toStereo(chs) {
+  if (chs.length === 1) return [chs[0], chs[0]];
+  if (chs.length === 2) return chs;
+  // 5.1 등: 앞 좌우에 가운데와 뒤 채널을 조금씩 섞는다
+  const n = chs[0].length, L = new Float32Array(n), R = new Float32Array(n), C = chs[2], SL = chs[4], SR = chs[5];
+  for (let i = 0; i < n; i++) {
+    const c = C[i] * 0.707;
+    L[i] = (chs[0][i] + c + (SL ? SL[i] * 0.5 : 0)) * 0.6;
+    R[i] = (chs[1][i] + c + (SR ? SR[i] * 0.5 : 0)) * 0.6;
+  }
+  return [L, R];
+}
+/* 표본화 주파수 바꾸기(직선 보간). 조각조각 들어오는 소리를 이어서 처리한다. */
+class Resampler {
+  constructor(inRate, outRate) { this.step = inRate / outRate; this.pos = 0; this.pl = 0; this.pr = 0; }
+  push(L, R) {
+    const n = L.length;
+    if (!n) return [L, R];
+    const m = Math.max(0, Math.floor((n - 1 - this.pos) / this.step) + 1), oL = new Float32Array(m), oR = new Float32Array(m);
+    let p = this.pos;
+    for (let k = 0; k < m; k++, p += this.step) {
+      const i = Math.floor(p), f = p - i, j = Math.min(n - 1, i + 1);
+      const al = i < 0 ? this.pl : L[i], ar = i < 0 ? this.pr : R[i];
+      oL[k] = al + (L[j] - al) * f; oR[k] = ar + (R[j] - ar) * f;
+    }
+    this.pos = p - n; this.pl = L[n - 1]; this.pr = R[n - 1];
+    return [oL, oR];
+  }
+}
+/* 음높이를 그대로 둔 채 빠르기만 바꾼다(WSOLA).
+   30ms짜리 토막을 절반씩 겹쳐 이어 붙이되, 바로 앞 토막과 파형이 가장 잘 이어지는 자리를 ±10ms 안에서 찾는다. */
+class Stretcher {
+  constructor(speed) {
+    this.s = speed; this.N = 1440; this.H = 720; this.D = 480;
+    this.L = new Float32Array(1 << 16); this.R = new Float32Array(1 << 16); this.len = 0; this.base = 0;
+    this.k = 0; this.prev = 0;
+    this.tl = new Float32Array(this.H); this.tr = new Float32Array(this.H);
+    this.win = Float32Array.from({ length: this.N }, (_, i) => 0.5 - 0.5 * Math.cos(2 * Math.PI * i / this.N));
+    this.tpl = new Float32Array(this.H >> 2);
+  }
+  push(l, r) {
+    const need = this.len + l.length;
+    if (need > this.L.length) {
+      let cap = this.L.length; while (cap < need) cap *= 2;
+      const nl = new Float32Array(cap), nr = new Float32Array(cap);
+      nl.set(this.L.subarray(0, this.len)); nr.set(this.R.subarray(0, this.len));
+      this.L = nl; this.R = nr;
+    }
+    this.L.set(l, this.len); this.R.set(r, this.len); this.len = need;
+    return this.run(false);
+  }
+  flush() { return this.run(true); }
+  score(c) {
+    const { L, R, tpl } = this, o = c - this.base;
+    let dot = 0, en = 1e-9;
+    for (let i = 0, j = o; i < tpl.length; i++, j += 4) { const x = L[j] + R[j]; dot += tpl[i] * x; en += x * x; }
+    return dot / Math.sqrt(en);
+  }
+  run(final) {
+    const { N, H, D, s, win } = this, oL = [], oR = [];
+    for (;;) {
+      const a = Math.round(this.k * H * s), avail = this.base + this.len;
+      if (final ? a >= avail : a + D + N > avail) break;
+      let p = a;
+      if (this.k > 0) {
+        const lo = Math.max(this.base, a - D), hi = Math.min(a + D, avail - N);
+        if (hi > lo) {
+          for (let i = 0, j = this.prev + H - this.base; i < this.tpl.length; i++, j += 4) this.tpl[i] = j < this.len ? this.L[j] + this.R[j] : 0;
+          p = clamp(a, lo, hi);
+          let best = this.score(p) + 1e-6;
+          for (let c = lo; c <= hi; c += 4) { const v = this.score(c); if (v > best) { best = v; p = c; } }
+        } else p = Math.max(this.base, Math.min(a, avail - N));
+      }
+      const l = new Float32Array(H), r = new Float32Array(H), first = this.k === 0;
+      for (let i = 0, j = p - this.base; i < N; i++, j++) {
+        const xl = j < this.len ? this.L[j] : 0, xr = j < this.len ? this.R[j] : 0, w = win[i];
+        if (i < H) { const g = first ? 1 : w; l[i] = this.tl[i] + xl * g; r[i] = this.tr[i] + xr * g; }
+        else { this.tl[i - H] = xl * w; this.tr[i - H] = xr * w; }
+      }
+      oL.push(l); oR.push(r);
+      this.prev = p; this.k++;
+      const drop = Math.min(Math.round(this.k * H * s) - D, p + H) - this.base;     // 더는 쓰지 않을 앞부분
+      if (drop > 16384) {
+        const d = Math.min(drop, this.len);
+        this.L.copyWithin(0, d, this.len); this.R.copyWithin(0, d, this.len); this.len -= d; this.base += d;
+      }
+    }
+    if (final) { oL.push(this.tl.slice()); oR.push(this.tr.slice()); }
+    const n = oL.length * H, L = new Float32Array(n), R = new Float32Array(n);
+    oL.forEach((x, i) => { L.set(x, i * H); R.set(oR[i], i * H); });
+    return [L, R];
+  }
+}
+/* 배경음악을 필요한 만큼씩 읽어 온다. 반복이 켜져 있으면 끝에서 처음으로 돌아간다. */
+class BgmReader {
+  constructor(f, loop) { this.f = f; this.loop = loop; this.q = []; this.qn = 0; this.done = false; this.it = null; this.got = false; }
+  async fill(n) {
+    while (this.qn < n && !this.done) {
+      if (!this.it) {
+        const rate = await this.f.track.getSampleRate();
+        this.rs = rate === CFG.SR ? null : new Resampler(rate, CFG.SR);
+        this.it = new AudioSampleSink(this.f.track).samples();
+      }
+      const r = await this.it.next();
+      if (r.done) { this.it = null; if (!this.loop || !this.got) this.done = true; continue; }
+      this.got = true;
+      let [L, R] = toStereo(planar(r.value)); r.value.close();
+      if (this.rs) [L, R] = this.rs.push(L, R);
+      this.q.push({ L, R, o: 0 }); this.qn += L.length;
+    }
+  }
+  async read(n) {
+    await this.fill(n);
+    const L = new Float32Array(n), R = new Float32Array(n);
+    for (let o = 0; o < n && this.q.length;) {
+      const c = this.q[0], m = Math.min(n - o, c.L.length - c.o);
+      L.set(c.L.subarray(c.o, c.o + m), o); R.set(c.R.subarray(c.o, c.o + m), o);
+      o += m; c.o += m; this.qn -= m;
+      if (c.o >= c.L.length) this.q.shift();
+    }
+    return [L, R];
+  }
+  async close() { try { await this.it?.return(); } catch { /* 이미 끝남 */ } }
+}
+
+/* ───────────── 내보내기 ───────────── */
+const abortErr = () => new DOMException('취소했습니다', 'AbortError');
+/* 화면과 소리를 따로 만들면서 한쪽이 너무 앞서가지 않게 붙잡는다. 덕분에 긴 영상도 메모리에 쌓이지 않는다. */
+function makeGate(signal) {
+  const pos = { v: 0, a: 0 }; let waiters = [];
+  const wake = () => { const w = waiters; waiters = []; w.forEach(f => f()); };
+  signal.addEventListener('abort', wake);
+  return {
+    check() { if (signal.aborted) throw abortErr(); },
+    async advance(me, t) {
+      const other = me === 'v' ? 'a' : 'v';
+      pos[me] = t; wake();
+      while (pos[me] > pos[other] + CFG.GATE_SEC && !signal.aborted) await new Promise(r => waiters.push(r));
+      this.check();
+    },
+    finish(me) { pos[me] = Infinity; wake(); },
+  };
+}
+async function runBoth(tasks, stop) {
+  const res = await Promise.allSettled(tasks.map(f => f().catch(e => { stop.abort(); throw e; })));
+  const errs = res.filter(r => r.status === 'rejected').map(r => r.reason);
+  if (errs.length) throw errs.find(e => e?.name !== 'AbortError') || errs[0];
+}
+
+function usedSources() { return [...new Set(lay().items.map(it => it.src))]; }
+function needAudio() { return (state.bgmFile && doc.bgm.on) || lay().items.some(it => it.src.hasAudio && it.src.aDecodable && audible(it.clip)); }
+/* 빠른 저장(다시 인코딩하지 않음)을 쓸 수 없는 이유들 */
+function copyBlockers() {
+  const { items } = lay(), used = usedSources(), why = [];
+  if (textPieces().length) why.push('자막');
+  if (used.some(s => s.crop || s.rot)) why.push('화면 자르기·돌리기');
+  if (items.some(it => it.clip.speed !== 1)) why.push('배속');
+  if (!doc.muteAll && items.some(it => it.src.hasAudio && (it.clip.muted || it.clip.volume !== 1))) why.push('소리 크기 조절');
+  if (state.bgmFile && doc.bgm.on) why.push('배경음악');
+  if (new Set(used.map(s => s.sig)).size > 1) why.push('형식이 서로 다른 영상');
+  const fmt = new Mp4OutputFormat().getSupportedCodecs(), s0 = used[0];
+  if (s0 && (!fmt.includes(s0.vCodec) || (s0.hasAudio && !doc.muteAll && !fmt.includes(s0.aCodec)))) why.push('mp4에 담을 수 없는 원본 형식');
+  return why;
+}
+/* 빠른 저장에서 조각마다 실제로 시작하는 자리(바로 앞 키프레임)를 찾는다 */
+async function copyPlan(metadataOnly) {
+  const plan = []; let off = 0;
+  for (const it of lay().items) {
+    const ps = new EncodedPacketSink(it.src.vTrack), opt = metadataOnly ? { metadataOnly: true } : { verifyKeyPackets: true };
+    const key = (await ps.getKeyPacket(it.clip.start, opt)) || (await ps.getFirstKeyPacket(opt));
+    if (!key) throw new Error('영상에서 키프레임을 찾지 못했습니다.');
+    const k = Math.min(key.timestamp, it.clip.start);
+    plan.push({ it, ps, key, k, off, early: it.clip.start - k });
+    off += it.clip.end - k;
+  }
+  return { plan, total: off };
+}
+async function exportCopy(output, signal, onProg) {
+  const s0 = lay().items[0].src, withAudio = s0.hasAudio && !doc.muteAll;
+  const vSrc = new EncodedVideoPacketSource(s0.vCodec);
+  output.addVideoTrack(vSrc, { rotation: await s0.vTrack.getRotation() });
+  let aSrc = null;
+  if (withAudio) { aSrc = new EncodedAudioPacketSource(s0.aCodec); output.addAudioTrack(aSrc); }
+  await output.start();
+  const { plan, total } = await copyPlan(false);
+  const stop = new AbortController(); signal.addEventListener('abort', () => stop.abort());
+  const gate = makeGate(stop.signal);
+  const vLoop = async () => {
+    let meta = { decoderConfig: await s0.vTrack.getDecoderConfig() };
+    for (const p of plan) {
+      for await (const pkt of p.ps.packets(p.key)) {
+        // 풀이 순서대로 가다가 끝 시각을 넘는 프레임이 나오면 멈춘다(뒤 프레임을 참조하는 프레임이 남지 않게)
+        if (pkt.timestamp >= p.it.clip.end - 1e-6) break;
+        if (pkt.timestamp < p.k - 1e-6) continue;
+        const ts = p.off + pkt.timestamp - p.k;
+        await vSrc.add(pkt.clone({ timestamp: Math.max(0, ts) }), meta); meta = undefined;
+        onProg(ts / total);
+        await gate.advance('v', ts);
+      }
+    }
+    gate.finish('v');
+  };
+  const aLoop = async () => {
+    let meta = { decoderConfig: await s0.aTrack.getDecoderConfig() }, lastEnd = 0;
+    for (const p of plan) {
+      const as = new EncodedPacketSink(p.it.src.aTrack);
+      const from = (await as.getPacket(p.k)) || (await as.getFirstPacket());
+      if (!from) continue;
+      for await (const pkt of as.packets(from)) {
+        if (pkt.timestamp >= p.it.clip.end - 1e-6) break;
+        const ts = Math.max(lastEnd, p.off + pkt.timestamp - p.k);     // 이어 붙인 자리에서 겹치지 않게 민다
+        await aSrc.add(pkt.clone({ timestamp: ts }), meta); meta = undefined;
+        lastEnd = ts + pkt.duration;
+        await gate.advance('a', ts);
+      }
+    }
+    gate.finish('a');
+  };
+  if (!aSrc) gate.finish('a');
+  await runBoth(aSrc ? [vLoop, aLoop] : [vLoop], stop);
+  return { duration: total };
+}
+
+function encodeSettings() {
+  const { items, total } = lay(), b = baseSize(), short = Math.min(b.w, b.h);
+  const k = exp.res === 'src' || exp.res >= short ? 1 : exp.res / short;
+  const W = even(b.w * k), H = even(b.h * k);
+  // 화면 녹화처럼 프레임이 드문드문한 영상도 움직임이 끊기지 않게 24 아래로는 내리지 않는다
+  const fps = Math.round(clamp(Math.max(...items.map(it => it.src.fps)), 24, CFG.MAX_FPS));
+  const audio = needAudio() ? CFG.AUDIO_BITRATE : 0;
+  let vBitrate, tight = false;
+  if (exp.q === 'size') {
+    vBitrate = (exp.mb * MB * 8 * 0.97) / Math.max(1, total) - audio;
+    tight = vBitrate < W * H * fps * 0.025;
+    vBitrate = Math.max(150000, vBitrate);
+  } else vBitrate = clamp(W * H * fps * CFG.BPP[exp.q], 300000, 40e6);
+  return { W, H, fps, vBitrate: Math.round(vBitrate), tight, bytes: (vBitrate + audio) * total / 8 };
+}
+async function exportEncode(output, o, signal, onProg) {
+  const { items, total } = lay(), { W, H, fps } = o, SR = CFG.SR;
+  const fmtCodecs = output.format.getSupportedCodecs();
+  const vCodec = await getFirstEncodableVideoCodec(['avc', 'vp9', 'av1'].filter(c => fmtCodecs.includes(c)), { width: W, height: H, quality: new Quality({ bitrate: o.vBitrate }) });
+  if (!vCodec) throw new Error('이 브라우저에는 이 크기의 영상을 만들 수 있는 인코더가 없습니다. 화면 크기를 줄여 보세요.');
+  const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d', { alpha: false });
+  const vSrc = new CanvasSource(canvas, { codec: vCodec, quality: new Quality({ bitrate: o.vBitrate }), keyFrameInterval: 2 });
+  output.addVideoTrack(vSrc, { frameRate: fps });
+  let aSrc = null, aCodec = null;
+  if (needAudio()) {
+    aCodec = await getFirstEncodableAudioCodec(['aac', 'opus'].filter(c => fmtCodecs.includes(c)), { numberOfChannels: 2, sampleRate: SR, quality: new Quality({ bitrate: CFG.AUDIO_BITRATE }) });
+    if (aCodec) { aSrc = new AudioSampleSource({ codec: aCodec, quality: new Quality({ bitrate: CFG.AUDIO_BITRATE }) }); output.addAudioTrack(aSrc); }
+  }
+  await output.start();
+  const stop = new AbortController(); signal.addEventListener('abort', () => stop.abort());
+  const gate = makeGate(stop.signal);
+
+  /* 화면: 원본 프레임을 풀어 가면서, 결과물의 프레임 시각마다 '그때 보이는 원본 프레임'을 그려 넣는다.
+     배속이 걸린 조각은 프레임을 건너뛰고, 프레임이 드문 영상은 같은 프레임을 다시 쓴다. */
+  const vLoop = async () => {
+    let n = 0;
+    for (const it of items) {
+      const { clip, src } = it;
+      let held = null;      // 지금 화면에 떠 있어야 할 원본 프레임
+      const emitUntil = async (smp, limit) => {
+        while (n / fps < limit - 1e-6) {
+          const tOut = n / fps, tSrc = clip.start + Math.max(0, tOut - it.o0) * clip.speed;
+          compose(ctx, W, H, smp ? (c, w, h) => smp.draw(c, 0, 0, w, h) : null, src, tSrc);
+          await vSrc.add(tOut, 1 / fps);
+          n++;
+          onProg(tOut / total);
+          await gate.advance('v', tOut);
+        }
+      };
+      try {
+        for await (const s of new VideoSampleSink(src.vTrack).samples(clip.start, clip.end)) {
+          const prev = held;
+          held = s;         // 새 프레임이 오면, 그 시각 전까지는 앞 프레임으로 채운다
+          if (prev) { try { await emitUntil(prev, it.o0 + (s.timestamp - clip.start) / clip.speed); } finally { prev.close(); } }
+          gate.check();
+        }
+        await emitUntil(held, it.o1);
+      } finally { held?.close(); }
+    }
+    gate.finish('v');
+  };
+
+  /* 소리: 조각마다 원본 소리를 풀어 [48kHz 스테레오로 맞춤 → 빠르기 → 음량] 순으로 처리하고 배경음악을 섞는다.
+     조각이 시작하고 끝나는 자리는 표본 단위로 맞춰서 화면과 어긋나지 않게 한다. */
+  const aLoop = async () => {
+    const totalF = Math.round(total * SR), b = doc.bgm;
+    const bgm = state.bgmFile && b.on ? new BgmReader(state.bgmFile, b.loop) : null;
+    let written = 0;
+    const emit = async (L, R, n, gain) => {
+      if (n <= 0) return;
+      const data = new Float32Array(n * 2);
+      let bl = null, br = null;
+      if (bgm) [bl, br] = await bgm.read(n);
+      for (let i = 0; i < n; i++) {
+        let l = L ? L[i] * gain : 0, r = R ? R[i] * gain : 0;
+        if (bl) { const g = b.volume * (b.fade ? clamp((totalF - written - i) / (2 * SR), 0, 1) : 1); l += bl[i] * g; r += br[i] * g; }
+        data[i * 2] = clamp(l, -1, 1); data[i * 2 + 1] = clamp(r, -1, 1);
+      }
+      const smp = new AudioSample({ data, format: 'f32', numberOfChannels: 2, sampleRate: SR, timestamp: written / SR });
+      try { await aSrc.add(smp); } finally { smp.close(); }
+      written += n;
+      await gate.advance('a', written / SR);
+    };
+    const padTo = async f => { while (written < f) await emit(null, null, Math.min(9600, f - written), 0); };
+    try {
+      for (const it of items) {
+        const { clip, src } = it, f1 = Math.round(it.o1 * SR);
+        await padTo(Math.round(it.o0 * SR));
+        if (src.hasAudio && src.aDecodable && audible(clip)) {
+          const rate = await src.aTrack.getSampleRate();
+          const rs = rate === SR ? null : new Resampler(rate, SR), st = clip.speed === 1 ? null : new Stretcher(clip.speed);
+          const feed = async (L, R, fin) => {
+            if (L && rs) [L, R] = rs.push(L, R);
+            if (st) [L, R] = fin ? st.flush() : st.push(L, R);
+            if (L) await emit(L, R, Math.min(L.length, f1 - written), clip.volume);
+          };
+          let pos = clip.start;      // 다음 소리가 와야 할 원본 시각
+          for await (const s of new AudioSampleSink(src.aTrack).samples(clip.start, clip.end)) {
+            try {
+              const chs = toStereo(planar(s)), t0 = s.timestamp;
+              let a = 0, e = s.numberOfFrames;
+              if (t0 < pos) a = Math.min(e, Math.round((pos - t0) * rate));                 // 조각 시작보다 앞선 부분은 버린다
+              else if (t0 > pos + 0.003) { const gap = Math.round((t0 - pos) * rate), z = new Float32Array(gap); await feed(z, z, false); }   // 빈 곳은 무음으로
+              e = Math.max(a, Math.min(e, Math.round((clip.end - t0) * rate)));            // 조각 끝을 넘는 부분도 버린다
+              if (e > a) await feed(chs[0].subarray(a, e), chs[1].subarray(a, e), false);
+              pos = t0 + e / rate;
+            } finally { s.close(); }
+          }
+          if (st) await feed(null, null, true);
+        }
+        await padTo(f1);
+      }
+    } finally { await bgm?.close(); }
+    gate.finish('a');
+  };
+  if (!aSrc) gate.finish('a');
+  await runBoth(aSrc ? [vLoop, aLoop] : [vLoop], stop);
+  return { duration: total, vCodec, aCodec };
+}
+
+/* 내보내기 창 */
+const exp = { mode: 'copy', res: 'src', q: 'mid', mb: 100, abort: null, planNote: '', planTotal: null };
+const CODEC_NAME = { avc: 'H.264', hevc: 'H.265', vp9: 'VP9', av1: 'AV1', vp8: 'VP8', aac: 'AAC', opus: 'Opus' };
+function openExport() {
+  if (!doc.clips.length || state.exporting) return;
+  pause(); if (state.cropMode) setCropMode(false);
+  if (!('VideoEncoder' in window)) return toast('이 브라우저에서는 영상을 저장할 수 없습니다. 데스크톱 크롬이나 엣지 최신 버전을 사용하세요.', 7000);
+  const b = baseSize(), short = Math.min(b.w, b.h), sel = $('expRes');
+  sel.textContent = '';
+  sel.append(el('option', { value: 'src', text: `원본 크기 (${even(b.w)}×${even(b.h)})` }));
+  for (const r of [1080, 720, 480, 360]) if (r < short) { const k = r / short; sel.append(el('option', { value: String(r), text: `${r}p (${even(b.w * k)}×${even(b.h * k)})` })); }
+  if (exp.res !== 'src' && exp.res >= short) exp.res = 'src';
+  if (exp.res === 'src' && short > 1080) exp.res = 1080;
+  const noCopy = copyBlockers();
+  exp.mode = noCopy.length ? 'encode' : 'copy';
+  exp.planNote = ''; exp.planTotal = null;
+  if (!exp.named || !$('expName').value.trim()) $('expName').value = lay().items[0].src.name.replace(/\.[^.]+$/, '') + '_편집';
+  $('dlgForm').hidden = false; $('dlgRun').hidden = true;
+  $('dlg').hidden = false;
+  renderExport();
+  if (!noCopy.length) {
+    copyPlan(true).then(({ plan, total }) => {
+      exp.planTotal = total;
+      const early = Math.max(...plan.map(p => p.early));
+      exp.planNote = early > 0.05 ? `화면이 끊기지 않게 조각의 시작이 최대 ${early.toFixed(1)}초 앞당겨집니다. 정확한 자리에서 시작해야 하면 "새로 만들기"를 고르세요.` : '모든 조각이 표시한 자리에서 정확히 시작합니다.';
+      renderExport();
+    }).catch(() => {});
+  }
+}
+function renderExport() {
+  const noCopy = copyBlockers(), noEnc = usedSources().filter(s => !s.canDecode), { total } = lay();
+  const copyOK = !noCopy.length, encOK = !noEnc.length;
+  if (exp.mode === 'copy' && !copyOK) exp.mode = 'encode';
+  if (exp.mode === 'encode' && !encOK && copyOK) exp.mode = 'copy';
+  for (const r of document.querySelectorAll('input[name=mode]')) { r.checked = r.value === exp.mode; r.disabled = r.value === 'copy' ? !copyOK : !encOK; }
+  $('optCopy').classList.toggle('sel', exp.mode === 'copy'); $('optCopy').classList.toggle('dis', !copyOK);
+  $('optEnc').classList.toggle('sel', exp.mode === 'encode'); $('optEnc').classList.toggle('dis', !encOK);
+  $('copyNote').className = copyOK ? '' : 'warn';
+  $('copyNote').textContent = copyOK ? (exp.planNote || '자르고 이어 붙이기만 했을 때 쓸 수 있습니다.') : `지금 편집에는 쓸 수 없습니다: ${noCopy.join(', ')}`;
+  $('encNote').hidden = encOK;
+  $('encNote').className = 'warn';
+  $('encNote').textContent = encOK ? '' : `이 브라우저가 풀 수 없는 영상이 있어 쓸 수 없습니다: ${noEnc.map(s => s.name).join(', ')}`;
+  $('encOpts').hidden = exp.mode !== 'encode';
+  $('expRes').value = String(exp.res); $('expQ').value = exp.q; $('expMB').value = exp.mb;
+  $('expMB').hidden = $('expMBu').hidden = exp.q !== 'size';
+  let sum, bytes;
+  if (exp.mode === 'copy') {
+    bytes = lay().items.reduce((a, it) => a + (it.clip.end - it.clip.start) / it.src.duration * it.src.file.size, 0) * (exp.planTotal ?? total) / total;
+    sum = `길이 ${fmtDur(exp.planTotal ?? total)} · 예상 용량 약 ${fmtMB(bytes)}`;
+  } else {
+    const o = encodeSettings();
+    bytes = o.bytes;
+    sum = `길이 ${fmtDur(total)} · ${o.W}×${o.H} · ${o.fps}fps · 예상 용량 약 ${fmtMB(bytes)}` + (o.tight ? ' — 이 용량에 맞추면 화질이 많이 떨어집니다. 화면 크기를 줄여 보세요.' : '');
+  }
+  if (!window.showSaveFilePicker && bytes > CFG.BUFFER_WARN) sum += ' — 이 브라우저는 큰 파일을 저장할 때 메모리를 많이 씁니다. 크롬이나 엣지를 권합니다.';
+  $('expSummary').textContent = sum;
+  $('expGo').disabled = !copyOK && !encOK;
+}
+function runUI(text, sub, frac) {
+  $('runText').textContent = text; $('runSub').textContent = sub || '';
+  if (frac != null) $('runBar').style.width = Math.round(clamp(frac, 0, 1) * 1000) / 10 + '%';
+}
+async function runExport() {
+  if (state.exporting) return;
+  const name = ($('expName').value.trim().replace(/[\\/:*?"<>|]+/g, '_').replace(/\.mp4$/i, '') || '편집') + '.mp4';
+  const mode = exp.mode, o = mode === 'encode' ? encodeSettings() : null;
+  // 저장할 곳을 먼저 정한다. 파일에 바로 쓰면 긴 영상도 메모리에 쌓이지 않는다.
+  let handle = null;
+  if (window.showSaveFilePicker) {
+    try { handle = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: 'MP4 동영상', accept: { 'video/mp4': ['.mp4'] } }] }); }
+    catch (e) { if (e?.name === 'AbortError') return; handle = null; }
+  }
+  state.exporting = true;
+  const ac = new AbortController(); exp.abort = ac;
+  $('dlgForm').hidden = true; $('dlgRun').hidden = false; $('runStop').hidden = false; $('runClose').hidden = true;
+  runUI('저장 준비 중…', '', 0);
+  const t0 = performance.now();
+  let lock = null, output = null, lastUI = 0;
+  try { lock = await navigator.wakeLock?.request('screen'); } catch { /* 없어도 된다 */ }
+  const onProg = f => {
+    const now = performance.now();
+    if (now - lastUI < 200) return;
+    lastUI = now;
+    const el = (now - t0) / 1000, left = f > 0.02 ? el * (1 - f) / f : null;
+    runUI(`저장하는 중… ${Math.floor(f * 100)}%`, `${left != null ? `남은 시간 약 ${fmtDur(left)} · ` : ''}끝날 때까지 이 탭을 열어 두세요.`, f);
+  };
+  try {
+    const target = handle ? new StreamTarget(await handle.createWritable(), { chunked: true }) : new BufferTarget();
+    output = new Output({ format: new Mp4OutputFormat({ fastStart: handle ? false : 'in-memory' }), target });
+    const info = mode === 'copy' ? await exportCopy(output, ac.signal, onProg) : await exportEncode(output, o, ac.signal, onProg);
+    runUI('마무리하는 중…', '', 1);
+    await output.finalize();
+    let size;
+    if (handle) size = (await handle.getFile()).size;
+    else { const blob = new Blob([target.buffer], { type: 'video/mp4' }); size = blob.size; download(blob, name); }
+    const took = (performance.now() - t0) / 1000;
+    const codecs = info.vCodec ? ` · ${CODEC_NAME[info.vCodec] || info.vCodec}${info.aCodec ? ' + ' + (CODEC_NAME[info.aCodec] || info.aCodec) : ''}` : '';
+    runUI('저장했습니다', `${handle ? handle.name : name} · ${fmtMB(size)} · 길이 ${fmtDur(info.duration)}${codecs} · 걸린 시간 ${fmtDur(took)}`, 1);
+    if (info.vCodec && info.vCodec !== 'avc') notice('codec', `이 브라우저에는 H.264 인코더가 없어 ${CODEC_NAME[info.vCodec]} 형식으로 저장했습니다. 일부 프로그램에서는 열리지 않을 수 있습니다.`);
+    state.dirty = false;
+  } catch (err) {
+    try { await output?.cancel(); } catch { /* 이미 닫힘 */ }
+    if (handle) { try { await handle.remove(); } catch { /* 남은 파일은 직접 지워야 한다 */ } }
+    if (ac.signal.aborted || err?.name === 'AbortError') runUI('저장을 취소했습니다', '', 0);
+    else { console.error(err); runUI('저장하지 못했습니다', friendlyError(err), 0); }
+  } finally {
+    state.exporting = false; exp.abort = null;
+    try { await lock?.release(); } catch { /* 이미 풀림 */ }
+    $('runStop').hidden = true; $('runClose').hidden = false;
+    syncVideo();
+  }
+}
+function friendlyError(err) {
+  const m = String(err?.message || err);
+  if (/quota|space|memory|allocation/i.test(m)) return '저장할 공간이나 메모리가 부족합니다. 화면 크기나 화질을 낮춰 다시 해 보세요.';
+  if (/decod/i.test(m)) return '영상을 푸는 중에 문제가 생겼습니다. 원본 파일이 손상되지 않았는지 확인해 주세요. (' + m + ')';
+  return m;
+}
+function closeExport() { if (!state.exporting) $('dlg').hidden = true; }
+
+/* ───────────── 입력 연결 ───────────── */
+$('btnAdd').onclick = $('btnAdd2').onclick = () => $('file').click();
+$('file').onchange = e => { const f = [...e.target.files]; e.target.value = ''; addFiles(f); };
+$('btnBgm').onclick = () => $('bgmFile').click();
+$('bgmFile').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) setBgm(f); };
+$('btnBgmDel').onclick = () => { doc.bgm.on = false; bgmEl.pause(); commit(); };
+$('btnUndo').onclick = undo; $('btnRedo').onclick = redo;
+$('btnPlay').onclick = togglePlay;
+$('btnPrev').onclick = () => seek(state.t - frameStep()); $('btnNext').onclick = () => seek(state.t + frameStep());
+$('btnSplit').onclick = splitAtHead; $('btnTrimL').onclick = () => trimAtHead('l'); $('btnTrimR').onclick = () => trimAtHead('r');
+$('btnDel').onclick = deleteSelected;
+$('btnZoomIn').onclick = () => setPps(state.pps * 1.6); $('btnZoomOut').onclick = () => setPps(state.pps / 1.6);
+$('btnZoomFit').onclick = () => { state.fit = true; sizeTL(); tlScroll.scrollLeft = 0; drawTL(); updateHead(); };
+$('btnExport').onclick = $('btnExport2').onclick = openExport;
+
+$('clipSpeed').onchange = e => { const c = clipById(state.selClip); if (!c) return; const loc = locate(state.t), keep = loc?.it.clip === c ? loc.tSrc : null; c.speed = Number(e.target.value); LAY = null; if (keep != null) { const it = lay().items.find(x => x.clip === c); state.t = it.o0 + (keep - c.start) / c.speed; } commit(); };
+$('clipVol').oninput = e => { const c = clipById(state.selClip); if (!c) return; c.volume = Number(e.target.value) / 100; $('clipVolOut').textContent = e.target.value + '%'; if (state.playing && playLoc?.it.clip === c) applyClipAudio(playLoc.it); drawTL(); };
+$('clipVol').onchange = () => commit();
+$('clipMute').onchange = e => { const c = clipById(state.selClip); if (c) { c.muted = e.target.checked; commit(); } };
+$('clipLeft').onclick = () => moveClip(-1); $('clipRight').onclick = () => moveClip(1);
+
+$('btnText').onclick = addText;
+$('textVal').oninput = e => { const t = textById(state.selText); if (t) { t.text = e.target.value; invalidate(); drawTL(); } };
+$('textVal').onchange = () => commit();
+$('textPos').onclick = e => { const v = e.target.dataset.v, t = textById(state.selText); if (v && t) { t.x = 0.5; t.y = TEXT_POS[v]; commit(); } };
+$('textSize').onclick = e => { const v = e.target.dataset.v, t = textById(state.selText); if (v && t) { t.size = v; commit(); } };
+$('textStyle').onchange = e => { const t = textById(state.selText); if (t) { t.style = e.target.value; commit(); } };
+function textEdge(side) {
+  const t = textById(state.selText), loc = locate(state.t); if (!t || !loc) return;
+  if (loc.it.src.id !== t.srcId) return toast('이 자막이 붙어 있는 영상의 조각 위에서 눌러 주세요. 다른 영상으로 옮기려면 타임라인에서 자막을 끌어다 놓으세요.', 6000);
+  if (side === 'l') { if (loc.tSrc > t.end - CFG.MIN_TEXT) return toast('시작은 끝보다 앞이어야 합니다.'); t.start = loc.tSrc; }
+  else { if (loc.tSrc < t.start + CFG.MIN_TEXT) return toast('끝은 시작보다 뒤여야 합니다.'); t.end = loc.tSrc; }
+  commit();
+}
+$('textIn').onclick = () => textEdge('l'); $('textOut').onclick = () => textEdge('r');
+
+$('btnCrop').onclick = () => setCropMode(!state.cropMode);
+$('btnRot').onclick = rotateSrc;
+$('ratio').onchange = e => { state.ratio = e.target.value; applyRatio(); };
+$('btnCropReset').onclick = () => { if (getCrop()) { setCrop(null); commit(); } };
+
+$('muteAll').onchange = e => { doc.muteAll = e.target.checked; commit(); };
+$('bgmVol').oninput = e => { doc.bgm.volume = Number(e.target.value) / 100; $('bgmVolOut').textContent = e.target.value + '%'; };
+$('bgmVol').onchange = () => commit();
+$('bgmLoop').onchange = e => { doc.bgm.loop = e.target.checked; commit(); };
+$('bgmFade').onchange = e => { doc.bgm.fade = e.target.checked; commit(); };
+
+for (const r of document.querySelectorAll('input[name=mode]')) r.onchange = () => { exp.mode = r.value; renderExport(); };
+$('expRes').onchange = e => { exp.res = e.target.value === 'src' ? 'src' : Number(e.target.value); renderExport(); };
+$('expQ').onchange = e => { exp.q = e.target.value; renderExport(); };
+$('expMB').oninput = e => { exp.mb = clamp(Number(e.target.value) || 1, 1, 4000); renderExport(); };
+$('expName').oninput = () => { exp.named = true; };
+$('expCancel').onclick = closeExport; $('runClose').onclick = closeExport;
+$('expGo').onclick = runExport;
+$('runStop').onclick = () => { exp.abort?.abort(); runUI('취소하는 중…', '', null); };
+$('dlg').addEventListener('pointerdown', e => { if (e.target === $('dlg')) closeExport(); });
+
+// 마우스로 누른 버튼·선택 상자·슬라이더에 포커스가 남아 단축키(Space, S 등)를 가로채는 일을 막는다
+document.addEventListener('click', e => { const b = e.target.closest('button'); if (b && e.detail > 0) b.blur(); });
+let byPointer = false;
+document.addEventListener('pointerdown', () => { byPointer = true; }, true);
+document.addEventListener('keydown', () => { byPointer = false; }, true);
+document.addEventListener('change', e => { if (byPointer && $('dlg').hidden && e.target.matches?.('select, input[type=range], input[type=checkbox]')) e.target.blur(); });
+
+document.addEventListener('keydown', e => {
+  if (!$('dlg').hidden) { if (e.key === 'Escape') closeExport(); return; }
+  const t = e.target, typing = t.matches?.('input[type=text], input[type=number], textarea, select');
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && !typing) {
+    const k = e.key.toLowerCase();
+    if (k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+    else if (k === 'y') { e.preventDefault(); redo(); }
+    return;
+  }
+  if (typing) { if (e.key === 'Escape') t.blur(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey || !doc.clips.length) return;
+  switch (e.code) {
+    case 'Space': e.preventDefault(); togglePlay(); break;
+    case 'KeyS': e.preventDefault(); splitAtHead(); break;
+    case 'KeyQ': e.preventDefault(); trimAtHead('l'); break;
+    case 'KeyW': e.preventDefault(); trimAtHead('r'); break;
+    case 'KeyT': e.preventDefault(); addText(); break;
+    case 'Delete': case 'Backspace': e.preventDefault(); deleteSelected(); break;
+    case 'ArrowLeft': e.preventDefault(); seek(state.t - (e.shiftKey ? 1 : frameStep())); break;
+    case 'ArrowRight': e.preventDefault(); seek(state.t + (e.shiftKey ? 1 : frameStep())); break;
+    case 'Home': e.preventDefault(); seek(0); break;
+    case 'End': e.preventDefault(); seek(lay().total); break;
+    case 'Equal': case 'NumpadAdd': e.preventDefault(); setPps(state.pps * 1.6); break;
+    case 'Minus': case 'NumpadSubtract': e.preventDefault(); setPps(state.pps / 1.6); break;
+    case 'Escape': if (state.cropMode) setCropMode(false); else if (state.selClip != null || state.selText != null) { state.selClip = state.selText = null; renderSide(); drawTL(); invalidate(); } break;
+  }
+});
+
+// 드래그 앤 드롭
+let dragDepth = 0;
+const hasFiles = e => [...(e.dataTransfer?.types || [])].includes('Files');
+window.addEventListener('dragenter', e => { if (hasFiles(e)) { e.preventDefault(); dragDepth++; $('stage').classList.add('drag'); } });
+window.addEventListener('dragover', e => { if (hasFiles(e)) e.preventDefault(); });
+window.addEventListener('dragleave', e => { if (hasFiles(e) && --dragDepth <= 0) { dragDepth = 0; $('stage').classList.remove('drag'); } });
+window.addEventListener('drop', e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault(); dragDepth = 0; $('stage').classList.remove('drag');
+  addFiles(e.dataTransfer.files);
+});
+
+// 저장하지 않은 편집이 있으면 탭을 닫기 전에 경고한다
+window.addEventListener('beforeunload', e => {
+  if (state.exporting || (state.dirty && doc.clips.length)) { e.preventDefault(); e.returnValue = ''; }
+});
+
+if (!('VideoEncoder' in window) || !('VideoDecoder' in window)) {
+  notice('browser', '이 브라우저에서는 영상을 저장할 수 없습니다. 데스크톱 크롬이나 엣지 최신 버전에서 열어 주세요.');
+}
+
+hist.stack.push(snap()); hist.idx = 0;
+renderAll();
+</script>
+</body>
+</html>
