@@ -93,6 +93,7 @@ main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 380px; min-
 .seg button { border: 0; background: #fff; height: 30px; padding: 0 10px; font-size: 12.5px; cursor: pointer; border-left: 1px solid var(--line2); display: inline-flex; align-items: center; gap: 5px; }
 .seg button:first-child { border-left: 0; }
 .seg button[aria-pressed=true] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.seg button:disabled { opacity: .4; cursor: default; }
 .seg svg { width: 14px; height: 14px; display: block; }
 .swatches { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .sw { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line2); cursor: pointer; padding: 0; }
@@ -240,9 +241,11 @@ import qrcode from './lib/qrcode-generator-2.0.4/qrcode.mjs';
 /* ───────────── 조정값 ───────────── */
 const CFG = {
   QUIET: 4,                 // QR 둘레에 비워 두는 칸 수(표준은 4)
-  HEART_GAP: 1,             // 하트 모양 QR에서 진짜 QR 둘레에 비워 두는 칸 수(스캐너가 QR의 경계를 찾는 데 필요)
+  HEART_GAP: 1,             // 하트 모양 QR에서 QR과 위쪽 봉우리의 장식 점 사이에 비워 두는 칸 수(스캐너가 QR의 경계를 찾는 데 필요)
+  HEART_MARGIN: 2,          // 하트 아래쪽(QR의 두 변)에서 QR과 테두리 사이에 비워 두는 칸 수
+  HEART_LINE: 0.8,          // 하트 테두리 굵기
   MIN_MODULE_MM: 0.45,      // 인쇄했을 때 QR 한 칸이 이보다 작으면 경고한다
-  HEART_FILL: 0.5,          // 하트를 채우는 장식 점의 비율
+  HEART_FILL: 0.5,          // 봉우리를 채우는 장식 점의 비율
   CENTER_RATIO: 0.26,       // 가운데 그림이 차지하는 폭(전체 칸 수 대비). 오류 복원 수준 H로 감당할 수 있는 범위
   CHECKS: [[420, 0], [420, 1.4], [640, 2.2]],     // 읽기 확인: [그림 크기, 흐림 정도]를 차례로 시도
   PNG_PX: 1200,             // 저장하는 그림의 가로 크기
@@ -341,48 +344,18 @@ function makeMatrix(data) {
   return qr;
 }
 /* ── 하트 모양 QR ──
-   QR 코드 자체는 네모여야 읽힌다. 그래서 진짜 QR을 하트 한가운데에 두고, 하트의 나머지 칸을 같은 모양의 장식 점으로 채워
-   전체가 점으로 된 하트 하나로 보이게 한다. 장식 점은 읽히는 내용과 상관없다. */
-const hit = document.createElement('canvas').getContext('2d');
-/* 하트 안에 들어가는 가장 큰 정사각형(하트 상자의 한 변을 1로 볼 때의 크기와 위쪽 위치) */
-const HEART_FIT = (() => {
-  const K = 1000, path = new Path2D(heartPath(0, 0, K)), inside = (x, y) => hit.isPointInPath(path, x * K, y * K);
-  for (let s = 0.75; s > 0.3; s -= 0.005) for (let y0 = 0.08; y0 < 0.45; y0 += 0.005) {
-    let ok = true;
-    for (let i = 0; i <= 24 && ok; i++) { const t = i / 24, a = 0.5 - s / 2; ok = inside(a + s * t, y0) && inside(a + s * t, y0 + s) && inside(a, y0 + s * t) && inside(a + s, y0 + s * t); }
-    if (ok) return { s, y0 };
-  }
-  return { s: 0.5, y0: 0.2 };
-})();
+   하트는 '모로 세운 네모 + 위쪽 두 변에 붙인 반원 두 개'로 만들 수 있다.
+   그래서 QR을 45도 돌려 하트의 아래쪽 뾰족한 부분으로 쓰고, 위쪽 봉우리 두 개(반원)만 같은 모양의 장식 점으로 채운다.
+   QR은 어느 방향으로 돌려도 읽히고, 아래쪽 두 변은 바깥이 비어 있어 스캐너가 경계를 찾기 쉽다. 장식 점은 읽히는 내용과 상관없다. */
 function seeded(str) {       // 같은 내용이면 늘 같은 무늬가 나오게 한다
   let h = 2166136261;
   for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
   return () => { h = (h + 0x6D2B79F5) | 0; let t = Math.imul(h ^ (h >>> 15), 1 | h); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
-function heartGrid(n, seed) {
-  const gap = CFG.HEART_GAP, need = n + 2 * gap;
-  let G = Math.ceil(need / HEART_FIT.s);
-  if ((G - n) % 2) G++;                    // QR이 정확히 가운데에 오도록
-  for (; ; G += 2) {
-    const path = new Path2D(heartPath(0, 0, G)), inH = (x, y) => x >= 0 && y >= 0 && x < G && y < G && hit.isPointInPath(path, x + 0.5, y + 0.5);
-    const qx = (G - n) / 2, qy = Math.round(HEART_FIT.y0 * G + (HEART_FIT.s * G - need) / 2) + gap;
-    const x0 = qx - gap, y0 = qy - gap, x1 = qx + n - 1 + gap, y1 = qy + n - 1 + gap;
-    if (G < need * 3 && !(inH(x0, y0) && inH(x1, y0) && inH(x0, y1) && inH(x1, y1))) continue;      // QR과 둘레 빈칸이 하트 안에 다 들어갈 때까지 하트를 키운다
-    const rnd = seeded(seed), cells = [];
-    let top = G, bottom = 0;
-    for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) {
-      if (!inH(x, y)) continue;
-      top = Math.min(top, y); bottom = Math.max(bottom, y);
-      const edge = !inH(x - 1, y) || !inH(x + 1, y) || !inH(x, y - 1) || !inH(x, y + 1), r = rnd();
-      if (x >= x0 && x <= x1 && y >= y0 && y <= y1) continue;          // 진짜 QR이 놓일 자리
-      if (edge || r < CFG.HEART_FILL) cells.push([x, y]);              // 가장자리는 모두 채워서 하트 윤곽이 또렷하게
-    }
-    return { G, qx, qy, top, bottom, cells };
-  }
-}
 /* opt.label: 이름·주소를 그림 안에 넣는다(그림으로 저장할 때) */
 function buildSvg(it, opt = {}) {
   const qr = makeMatrix(it.data), n = qr.getModuleCount(), Q = CFG.QUIET, B = n + 2 * Q, c = S.color;
+  const heart = S.shape === 'heart', up = heart ? -45 : 0;      // 하트 모양에서는 QR을 45도 돌리므로, 가운데 그림은 반대로 돌려 똑바로 세운다
   // 가운데 비울 칸
   let k = 0;
   if (S.center !== 'none') { k = Math.max(5, Math.round(n * CFG.CENTER_RATIO)); if (k % 2 === 0) k++; }
@@ -394,28 +367,35 @@ function buildSvg(it, opt = {}) {
   for (const [ex, ey] of [[0, 0], [n - 7, 0], [0, n - 7]]) { const e = eyePath(ex, ey, S.dot); ring += e.ring; core += e.core; }
   let inner = `<path d="${d}" fill="${c}"/><path d="${ring}" fill="${c}" fill-rule="evenodd"/><path d="${core}" fill="${c}"/>`;
   if (k) {
-    const a = accentOf(), m = n / 2, s = k - 1.2;
+    const a = accentOf(), m = n / 2, s = k - 1.2, from = inner.length;
     if (S.center === 'heart') inner += `<path d="${heartPath(m - s / 2, m - s / 2 + 0.1, s)}" fill="${a}"/>`;
     else if (S.center === 'star') inner += `<path d="${starPath(m, m + 0.2, s / 2 + 0.2)}" fill="${a}"/>`;
     else if (S.center === 'text' && S.centerText) {
       const t = S.centerText, w = [...t].reduce((x, ch) => x + (ch.charCodeAt(0) > 0x2E80 ? 1 : 0.6), 0), fs = Math.min(s * 0.9, (s + 0.6) / Math.max(1, w));
       inner += `<text x="${f2(m)}" y="${f2(m)}" font-size="${f2(fs)}" font-weight="800" fill="${a}" text-anchor="middle" dominant-baseline="central" font-family="'Pretendard','Malgun Gothic','Apple SD Gothic Neo',sans-serif">${xmlEsc(t)}</text>`;
     } else if (S.center === 'image' && S.logo) inner += `<image href="${S.logo}" x="${f2(m - s / 2)}" y="${f2(m - s / 2)}" width="${f2(s)}" height="${f2(s)}" preserveAspectRatio="xMidYMid meet"/>`;
+    if (up) inner = inner.slice(0, from) + `<g transform="rotate(${up} ${f2(m)} ${f2(m)})">` + inner.slice(from) + '</g>';
   }
   // 전체 모양과 바깥 크기
-  let W = B, H = B, ox = Q, oy = Q, deco = '';
-  if (S.shape === 'heart') {
-    const g = heartGrid(n, it.data), pad = 2;
+  let W = B, H = B, tx = Q, ty = Q, turn = '', extra = '';
+  if (heart) {
+    const g = CFG.HEART_GAP, mg = CFG.HEART_MARGIN, L = n + g + mg, R = L / 2, mid = (n + mg - g) / 2, far = n + mg, rnd = seeded(it.data);
+    // 봉우리 두 개: QR의 위쪽 변과 왼쪽 변에 붙는 반원(돌리기 전 좌표). 테두리 안쪽에 온전히 들어가는 칸만 쓴다
     let fd = '';
-    for (const [x, y] of g.cells) fd += dotPath(x, y, S.dot);
-    W = g.G + pad * 2; H = g.bottom - g.top + 1 + pad * 2; ox = g.qx + pad; oy = g.qy - g.top + pad;
-    deco = `<path d="${fd}" fill="${c}" transform="translate(${pad} ${pad - g.top})"/>`;
+    const inLobe = (x, y, cx, cy) => Math.hypot(Math.max(Math.abs(x - cx), Math.abs(x + 1 - cx)), Math.max(Math.abs(y - cy), Math.abs(y + 1 - cy))) <= R - CFG.HEART_LINE;
+    for (let y = -g - Math.ceil(R); y <= -g - 1; y++) for (let x = Math.floor(mid - R); x < mid + R; x++) if (inLobe(x, y, mid, -g) && rnd() < CFG.HEART_FILL) fd += dotPath(x, y, S.dot);
+    for (let x = -g - Math.ceil(R); x <= -g - 1; x++) for (let y = Math.floor(mid - R); y < mid + R; y++) if (inLobe(x, y, -g, mid) && rnd() < CFG.HEART_FILL) fd += dotPath(x, y, S.dot);
+    const outline = `M${-g} ${far}L${far} ${far}L${far} ${-g}A${f2(R)} ${f2(R)} 0 0 0 ${-g} ${-g}A${f2(R)} ${f2(R)} 0 0 0 ${-g} ${far}Z`;
+    extra = `<path d="${outline}" fill="#fff" stroke="${c}" stroke-width="${CFG.HEART_LINE}" stroke-linejoin="round"/><path d="${fd}" fill="${c}"/>`;
+    // 45도 돌린 뒤의 크기: 봉우리 양 끝, 봉우리 꼭대기, 아래 꼭짓점
+    const q = Math.SQRT1_2, pad = 1.5, c1x = (mid + g) * q, c1y = (mid - g) * q;
+    W = 2 * (c1x + R) + pad * 2; H = far * 2 * q - (c1y - R) + pad * 2;
+    tx = c1x + R + pad; ty = R - c1y + pad; turn = ' rotate(45)';
   }
   let back = `<rect width="${f2(W)}" height="${f2(H)}" fill="#fff"/>`;
   if (S.frame === 'card') {
-    W += 2; H += 2; ox += 1; oy += 1;
+    W += 2; H += 2; tx += 1; ty += 1;
     back = `<rect x="0.35" y="0.35" width="${f2(W - 0.7)}" height="${f2(H - 0.7)}" rx="3.2" fill="#fff" stroke="${c}" stroke-width="0.7"/>`;
-    if (deco) deco = `<g transform="translate(1 1)">${deco}</g>`;
   }
   let label = '';
   if (opt.label) {
@@ -428,7 +408,7 @@ function buildSvg(it, opt = {}) {
     if (lines.length) H = y + 0.8;
   }
   const bg = opt.label ? `<rect width="${f2(W)}" height="${f2(H)}" fill="#fff"/>` : '';
-  return { W, H, svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${f2(W)} ${f2(H)}">${bg}${back}${deco}<g transform="translate(${f2(ox)} ${f2(oy)})">${inner}</g>${label}</svg>` };
+  return { W, H, svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${f2(W)} ${f2(H)}">${bg}${back}<g transform="translate(${f2(tx)} ${f2(ty)})${turn}">${extra}${inner}</g>${label}</svg>` };
 }
 /* SVG를 그림(캔버스)으로 */
 function rasterize(svg, W, H, px, blur = 0) {
@@ -450,6 +430,7 @@ function rasterize(svg, W, H, px, blur = 0) {
 /* ───────────── 화면 ───────────── */
 let gen = 0;
 function render() {
+  if (S.shape === 'heart' && S.dot === 'heart') S.dot = 'round';      // 비스듬한 QR 안의 작은 하트는 읽기 어려워서 쓰지 않는다
   items = parseLines($('src').value);
   const has = items.length > 0, grid = $('grid');
   $('empty').hidden = has; $('sheet').hidden = !has;
@@ -479,6 +460,8 @@ function render() {
     grid.append(cell);
   }
   setPressed('shapeSeg', S.shape); setPressed('dotSeg', S.dot); setPressed('frameSeg', S.frame);
+  const hb = $('dotSeg').querySelector('[data-v=heart]');
+  hb.disabled = S.shape === 'heart'; hb.title = hb.disabled ? '하트 모양 QR에서는 하트 점을 쓸 수 없습니다(읽기 어려워집니다). 가운데에 하트를 넣을 수는 있습니다.' : '';
   for (const b of $('swatches').children) b.setAttribute('aria-pressed', b.dataset.v === S.color);
   $('colorPick').value = S.color;
   $('centerText').hidden = S.center !== 'text'; $('btnLogo').hidden = S.center !== 'image';
@@ -517,10 +500,10 @@ async function check() {
     const cellMm = (186 - (S.cols - 1) * 5) / S.cols, small = list.filter(it => cellMm / it.W < CFG.MIN_MODULE_MM).length;
     if (small) {
       st.className = 'warn';
-      st.textContent = `읽기 확인은 통과했지만, 한 줄에 ${S.cols}개로 인쇄하면 ${small}개는 점이 너무 작아(${CFG.MIN_MODULE_MM}mm 미만) 휴대전화로 읽기 어려울 수 있습니다. 한 줄 개수를 줄이` + (S.shape === 'heart' ? '거나 전체 모양을 네모로 바꾸세요. 하트 모양은 진짜 QR이 가운데 절반 크기로 들어가서 더 크게 찍어야 합니다.' : '거나 주소를 짧게 해 보세요.');
+      st.textContent = `읽기 확인은 통과했지만, 한 줄에 ${S.cols}개로 인쇄하면 ${small}개는 점이 너무 작아(${CFG.MIN_MODULE_MM}mm 미만) 휴대전화로 읽기 어려울 수 있습니다. 한 줄 개수를 줄이` + (S.shape === 'heart' ? '거나 전체 모양을 네모로 바꾸세요. 하트 모양은 QR이 네모일 때보다 작게 들어가서 더 크게 찍어야 합니다.' : '거나 주소를 짧게 해 보세요.');
     } else {
       st.className = 'ok';
-      st.textContent = `${list.length}개 모두 읽기 확인을 통과했습니다.` + (S.shape === 'heart' ? ' 하트 모양은 진짜 QR이 가운데에 작게 들어가므로 크게 인쇄하고, 나눠 주기 전에 휴대전화로 한 번 찍어 보세요.' : S.dot === 'heart' || S.center !== 'none' ? ' 꾸민 QR은 인쇄한 뒤 휴대전화로도 한 번 찍어 보세요.' : '');
+      st.textContent = `${list.length}개 모두 읽기 확인을 통과했습니다.` + (S.shape === 'heart' ? ' 하트 모양은 QR이 조금 작게 들어가므로 넉넉한 크기로 인쇄하고, 나눠 주기 전에 휴대전화로 한 번 찍어 보세요.' : S.dot === 'heart' || S.center !== 'none' ? ' 꾸민 QR은 인쇄한 뒤 휴대전화로도 한 번 찍어 보세요.' : '');
     }
   }
 }
