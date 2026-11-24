@@ -17,7 +17,10 @@
   a.card:hover, a.card:focus-visible { border-color: #2456c9; }
   .name { font-weight: 700; }
   .desc { color: #5a6375; font-size: 14px; }
-  footer { max-width: 640px; margin: 0 auto; padding: 24px 20px 40px; color: #5a6375; font-size: 13px; }
+  footer { max-width: 640px; margin: 0 auto; padding: 24px 20px 40px; color: #5a6375; font-size: 13px; line-height: 1.9; }
+  footer .part { white-space: nowrap; }      /* 좁은 화면에서는 덩어리 사이에서만 줄이 바뀐다 */
+  footer .blog { color: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); text-underline-offset: 3px; }
+  footer .blog:hover { color: #1d2433; text-decoration-color: currentColor; }
   footer .hub { color: inherit; font-weight: 500; white-space: nowrap; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); text-underline-offset: 3px; }
   footer .hub:hover { color: #1d2433; text-decoration-color: currentColor; }
 </style>
@@ -70,6 +73,6 @@
     </a></li>
   </ul>
 </main>
-<footer>© 2026 제작: 김연경(earthssaem@gmail.com) | <a class="hub" href="https://earthssaem-lab.vercel.app/" target="_blank" rel="noopener">연경쌤의 지구과학 실험실 둘러보기 →</a></footer>
+<footer><span class="part">© 2026 제작: 김연경(earthssaem@gmail.com)</span> | <span class="part">블로그: <a class="blog" href="https://blog.naver.com/earthssaem" target="_blank" rel="noopener">blog.naver.com/earthssaem</a></span><br><a class="hub" href="https://earthssaem-lab.vercel.app/" target="_blank" rel="noopener">연경쌤의 지구과학 실험실 둘러보기 →</a></footer>
 </body>
 </html>
