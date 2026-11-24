@@ -1,0 +1,925 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- 이 페이지는 자기 자신(같은 주소)에서 받은 파일만 불러올 수 있다. 바깥으로 나가는 요청은 브라우저가 막는다. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' blob:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>사진 도구</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23c2410c'/%3E%3Crect x='5' y='8' width='22' height='16' rx='2.5' fill='%23fff'/%3E%3Ccircle cx='11' cy='13.5' r='2.2' fill='%23ffb000'/%3E%3Cpath d='M7 22l6-6 4 4 3-3 5 5z' fill='%23c2410c'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f3f5f8; --panel: #ffffff; --line: #dde3ea; --line2: #c9d1db;
+  --text: #1b2530; --muted: #657282; --accent: #1769e0; --accent-soft: #e8f0fd;
+  --danger: #d43c3c; --warn-bg: #fff6dd; --warn-text: #7a5600; --ok: #1f7a45; --ok-bg: #e6f5ec;
+  --stage: #10151b; --radius: 8px;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.45 "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+button, input, select { font: inherit; color: inherit; }
+kbd {
+  font: 11px/1 ui-monospace, Consolas, monospace; padding: 2px 5px; border: 1px solid var(--line2);
+  border-bottom-width: 2px; border-radius: 4px; background: #fff; color: var(--muted);
+}
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 13px; white-space: nowrap;
+  border: 1px solid var(--line2); border-radius: 7px; background: #fff; color: var(--text); cursor: pointer;
+}
+.btn:hover:not(:disabled) { border-color: #9aa7b6; background: #f8fafc; }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.btn.primary:hover:not(:disabled) { background: #0f58c4; border-color: #0f58c4; }
+.btn.danger { color: #b42323; border-color: #e3b1b1; }
+.btn.sm { height: 30px; padding: 0 10px; font-size: 13px; }
+.btn.xs { height: 26px; padding: 0 8px; font-size: 12px; border-radius: 6px; }
+select { height: 32px; padding: 0 8px; border: 1px solid var(--line2); border-radius: 7px; background: #fff; min-width: 0; }
+select:focus-visible, button:focus-visible, a:focus-visible, .thumb:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* 상단 */
+.top {
+  display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--panel);
+  border-bottom: 1px solid var(--line); flex-wrap: wrap;
+}
+.top h1 { font-size: 17px; margin: 0 8px 0 0; letter-spacing: -.01em; white-space: nowrap; }
+/* 도구 목록(연경쌤의 업무 도구함)으로 돌아가는 링크 */
+a.hub {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 11px 0 6px; white-space: nowrap;
+  border: 1px solid var(--line2); border-radius: 7px; color: var(--muted); text-decoration: none; font-size: 13px;
+}
+a.hub img { width: 22px; height: 22px; border-radius: 5px; display: block; }
+a.hub:hover { border-color: #9aa7b6; background: #f8fafc; color: var(--text); }
+/* 제목을 누르면 처음 화면(사진 목록)으로 */
+a.brand { color: inherit; text-decoration: none; border-radius: 8px; margin: -4px 0; padding: 4px 0; -webkit-tap-highlight-color: transparent; }
+@media (hover: hover) { a.brand:hover h1 { color: var(--accent); } }
+.spacer { flex: 1; }
+.local-note {
+  display: flex; align-items: center; gap: 6px; color: var(--ok); background: var(--ok-bg);
+  border-radius: 999px; padding: 4px 11px; font-size: 12.5px; font-weight: 600; white-space: nowrap;
+}
+#notices:empty { display: none; }
+.notice {
+  padding: 8px 16px; background: var(--warn-bg); color: var(--warn-text); font-size: 13px;
+  border-bottom: 1px solid #f0e2b4; display: flex; gap: 10px; align-items: center;
+}
+.notice button { margin-left: auto; }
+
+/* 본문 */
+main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 320px; min-height: 0; }
+.left { display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }
+.left.drag::after {
+  content: "여기에 놓으면 추가합니다"; position: absolute; inset: 10px; border: 2px dashed #6ea8ff; border-radius: 12px;
+  background: rgba(23, 105, 224, .16); color: var(--accent); display: grid; place-items: center; font-size: 18px; font-weight: 600; z-index: 5; pointer-events: none;
+}
+
+/* 목록 */
+#listView { flex: 1; overflow-y: auto; padding: 16px; }
+.empty { max-width: 560px; margin: 8vh auto 0; text-align: center; border: 2px dashed var(--line2); border-radius: 14px; padding: 34px 24px; background: #fff; }
+.empty h2 { font-size: 19px; margin: 0 0 6px; }
+.empty p { margin: 0 0 18px; color: var(--muted); text-wrap: balance; }
+.empty ol { text-align: left; margin: 20px auto 0; padding: 0 0 0 20px; color: var(--muted); font-size: 13px; line-height: 1.9; max-width: 430px; }
+#grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+.card { background: #fff; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+.thumb { position: relative; background: #e9edf2; aspect-ratio: 4 / 3; display: grid; place-items: center; cursor: pointer; border: 0; padding: 0; width: 100%; }
+.thumb canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
+.thumb .wait { color: var(--muted); font-size: 12px; }
+.thumb:hover::after { content: "눌러서 가리기"; position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); background: rgba(0, 0, 0, .7); color: #fff; font-size: 12px; padding: 3px 9px; border-radius: 5px; white-space: nowrap; }
+.c-body { padding: 9px 10px 10px; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.c-name { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.c-size { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.c-size b { color: var(--text); font-weight: 600; }
+.c-size.err { color: var(--danger); }
+.tags { display: flex; gap: 4px; flex-wrap: wrap; min-height: 20px; }
+.tag { font-size: 11px; line-height: 18px; padding: 0 7px; border-radius: 9px; background: #edf0f4; color: var(--muted); white-space: nowrap; }
+.tag.gps { background: #fde8e8; color: #a12626; }
+.tag.cov { background: var(--accent-soft); color: var(--accent); }
+.c-acts { display: flex; gap: 6px; margin-top: 2px; }
+.c-acts .btn { flex: 1; justify-content: center; }
+.c-acts .btn.x { flex: none; }
+
+/* 가리기 화면 */
+#editView { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.tools { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; font-size: 13px; }
+.tools .sep { width: 1px; height: 20px; background: var(--line); margin: 0 2px; }
+#edName { font-weight: 600; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seg { display: inline-flex; border: 1px solid var(--line2); border-radius: 7px; overflow: hidden; }
+.seg button { border: 0; background: #fff; height: 28px; padding: 0 11px; font-size: 12.5px; cursor: pointer; border-left: 1px solid var(--line2); }
+.seg button:first-child { border-left: 0; }
+.seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.stage { flex: 1; min-height: 0; background: var(--stage); position: relative; display: grid; place-items: center; overflow: hidden; }
+.pbox { position: relative; background: #000; }
+.pbox canvas { display: block; width: 100%; height: 100%; }
+#regLayer { position: absolute; inset: 0; cursor: crosshair; touch-action: none; user-select: none; }
+.reg { position: absolute; border: 1.5px dashed rgba(255, 255, 255, .9); box-shadow: 0 0 0 1px rgba(0, 0, 0, .55); cursor: move; }
+.reg.sel { border: 2px solid #ffd500; }
+.reg i { position: absolute; width: 12px; height: 12px; background: #fff; border: 1px solid #1b2530; border-radius: 2px; display: none; }
+.reg.sel i { display: block; }
+.reg i[data-h=nw] { left: -7px; top: -7px; cursor: nwse-resize; }
+.reg i[data-h=ne] { right: -7px; top: -7px; cursor: nesw-resize; }
+.reg i[data-h=sw] { left: -7px; bottom: -7px; cursor: nesw-resize; }
+.reg i[data-h=se] { right: -7px; bottom: -7px; cursor: nwse-resize; }
+.reg b {
+  position: absolute; right: -11px; top: -26px; width: 22px; height: 22px; border-radius: 11px; background: #d43c3c; color: #fff;
+  font: 700 13px/22px system-ui, sans-serif; text-align: center; cursor: pointer; display: none;
+}
+.reg.sel b { display: block; }
+.reg.top0 b { top: auto; bottom: -26px; }
+#edHint { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); background: rgba(0, 0, 0, .72); color: #fff; font-size: 13px; padding: 5px 12px; border-radius: 6px; white-space: nowrap; pointer-events: none; z-index: 3; }
+#edWait { color: #c7d0da; font-size: 14px; }
+
+/* 옆 패널 */
+.side { background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+#panels { flex: 1; overflow-y: auto; padding: 4px 14px 12px; }
+.sec { border-bottom: 1px solid var(--line); padding: 12px 0 14px; display: flex; flex-direction: column; gap: 9px; }
+.sec:last-child { border-bottom: 0; }
+.sec h2 { font-size: 14px; margin: 0; }
+.row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.row > span:first-child { width: 68px; color: var(--muted); flex: none; }
+.row select { flex: 1; font-size: 13px; }
+.hint { color: var(--muted); font-size: 12.5px; line-height: 1.6; margin: 0; }
+.safe { color: var(--ok); background: var(--ok-bg); border-radius: 8px; padding: 9px 11px; font-size: 12.5px; line-height: 1.6; }
+.safe b { font-weight: 700; }
+#sum { font-size: 13px; line-height: 1.7; }
+#sum b { font-size: 15px; }
+.sidefoot { border-top: 1px solid var(--line); padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 8px; }
+#btnSaveAll { height: 40px; justify-content: center; font-size: 15px; }
+#prog { font-size: 12px; color: var(--muted); min-height: 18px; display: flex; align-items: center; gap: 8px; }
+.bar { flex: none; width: 110px; height: 6px; border-radius: 3px; background: #e6eaef; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.srclink { align-self: flex-end; font-size: 12px; color: var(--muted); }
+.srclink:hover { color: var(--text); }
+
+#toasts { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 50; align-items: center; pointer-events: none; }
+.toast { background: #1b2530; color: #fff; padding: 9px 14px; border-radius: 8px; font-size: 13px; box-shadow: 0 6px 20px rgba(0, 0, 0, .25); max-width: 80vw; }
+[hidden] { display: none !important; }
+@media (max-width: 760px) {
+  body { overflow: auto; }
+  main { grid-template-columns: 1fr; }
+  .side { border-left: 0; border-top: 1px solid var(--line); }
+  #editView { min-height: 70vh; }
+  .local-note { display: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <a class="hub" href="../" title="연경쌤의 업무 도구함으로 돌아가기"><img src="../icon.svg" alt="">도구함</a>
+  <a class="brand" id="homeLink" href="#" title="처음 화면으로" aria-label="사진 도구 — 처음 화면으로"><h1>사진 도구</h1></a>
+  <button id="btnAdd" class="btn" type="button">＋ 사진 추가</button>
+  <input id="file" type="file" accept="image/*,.heic,.heif" multiple hidden>
+  <span class="spacer"></span>
+  <div class="local-note" title="모든 처리는 이 브라우저 안에서만 이루어집니다. 서버로 보내거나 저장하지 않습니다.">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.2 7V5a2.8 2.8 0 0 1 5.6 0v2"/></svg>
+    사진은 이 컴퓨터 밖으로 나가지 않습니다
+  </div>
+</header>
+
+<div id="notices"></div>
+
+<main>
+  <section class="left" id="left">
+    <div id="listView">
+      <div class="empty" id="empty">
+        <h2>사진을 여기에 끌어다 놓으세요</h2>
+        <p>여러 장을 한꺼번에 넣을 수 있습니다. 아이폰 사진(HEIC)도 됩니다.</p>
+        <button class="btn primary" type="button" id="btnAdd2">사진 선택</button>
+        <ol>
+          <li>사진을 넣으면 오른쪽 설정대로 크기와 용량을 줄입니다.</li>
+          <li>얼굴이나 이름표를 가리려면 사진을 눌러 그 부분을 드래그합니다.</li>
+          <li>"모두 저장"을 누르면 ZIP 하나로 받습니다. 촬영 위치와 기기 정보는 저장본에서 지워집니다.</li>
+        </ol>
+      </div>
+      <div id="grid"></div>
+    </div>
+
+    <div id="editView" hidden>
+      <div class="tools">
+        <button class="btn sm" type="button" id="btnBack" title="사진 목록으로 (Esc)">← 목록</button>
+        <span id="edName"></span>
+        <span class="sep"></span>
+        <button class="btn xs" type="button" id="btnPrev" title="이전 사진 (←)">◀</button>
+        <button class="btn xs" type="button" id="btnNext" title="다음 사진 (→)">▶</button>
+        <span id="edPos" class="hint"></span>
+        <span class="spacer"></span>
+        <span class="seg" id="styleSeg" title="새로 그리는 가림의 모양. 가림을 선택한 상태에서 누르면 그 가림이 바뀝니다.">
+          <button type="button" data-v="mosaic">모자이크</button><button type="button" data-v="blur">흐리게</button><button type="button" data-v="fill">검게 칠하기</button>
+        </span>
+        <button class="btn sm" type="button" id="btnRot" title="시계 방향으로 90도 돌립니다">↻ 돌리기</button>
+        <button class="btn sm danger" type="button" id="btnClear">가림 모두 지우기</button>
+      </div>
+      <div class="stage" id="stage">
+        <div id="edWait">사진을 여는 중…</div>
+        <div class="pbox" id="pbox" hidden>
+          <canvas id="cv"></canvas>
+          <div id="regLayer"></div>
+        </div>
+        <div id="edHint" hidden>가릴 곳을 드래그하세요</div>
+      </div>
+    </div>
+  </section>
+
+  <aside class="side">
+    <div id="panels">
+      <section class="sec">
+        <h2>저장 설정</h2>
+        <div class="row"><span>크기</span>
+          <select id="optSide">
+            <option value="0">원본 크기 그대로</option>
+            <option value="2560">긴 변 2560px</option>
+            <option value="1920">긴 변 1920px</option>
+            <option value="1280">긴 변 1280px</option>
+            <option value="800">긴 변 800px</option>
+          </select>
+        </div>
+        <div class="row"><span>형식</span>
+          <select id="optFmt">
+            <option value="jpeg">JPG</option>
+            <option value="keep">JPG (PNG는 PNG 그대로)</option>
+            <option value="webp">WebP</option>
+          </select>
+        </div>
+        <div class="row"><span>화질</span>
+          <select id="optQ">
+            <option value="high">높음</option>
+            <option value="mid">보통</option>
+            <option value="low">낮음 (용량 작게)</option>
+          </select>
+        </div>
+        <div class="row"><span>장당 용량</span>
+          <select id="optMax">
+            <option value="0">제한 없음</option>
+            <option value="2048">2MB 이하</option>
+            <option value="1024">1MB 이하</option>
+            <option value="500">500KB 이하</option>
+            <option value="200">200KB 이하</option>
+          </select>
+        </div>
+        <p class="hint">용량 제한에 맞추려면 화질을 먼저 낮추고, 그래도 넘으면 크기를 줄입니다.</p>
+      </section>
+      <section class="sec">
+        <h2>개인정보</h2>
+        <div class="safe">저장본에는 <b>촬영 위치, 촬영 시각, 기기 정보가 들어가지 않습니다.</b> 사진을 새로 그려서 저장하기 때문입니다.</div>
+        <p class="hint" id="gpsNote"></p>
+      </section>
+      <section class="sec">
+        <h2>결과</h2>
+        <div id="sum">사진을 넣으면 여기에 줄어든 용량이 나옵니다.</div>
+      </section>
+    </div>
+    <div class="sidefoot">
+      <div id="prog"></div>
+      <button id="btnSaveAll" class="btn primary" type="button" disabled>모두 저장</button>
+      <a class="srclink" href="https://github.com/earthssaem/tools/tree/main/photo" target="_blank" rel="noopener noreferrer" title="libheif(LGPL)를 사용하므로 소스를 공개합니다">소스·라이선스</a>
+    </div>
+  </aside>
+</main>
+
+<div id="toasts" aria-live="polite"></div>
+
+<script type="module">
+/* ───────────── 조정값 ───────────── */
+const CFG = {
+  QUAL: { high: 0.9, mid: 0.8, low: 0.65 },
+  MIN_QUAL: 0.4,            // 용량 제한에 맞출 때 화질을 여기까지 낮춰 보고, 그래도 넘으면 크기를 줄인다
+  THUMB: 480,               // 목록 그림의 긴 변
+  MOSAIC_CELLS: 8,          // 가림 영역의 짧은 변을 몇 칸으로 뭉갤지. 작을수록 알아보기 어렵다
+  BLUR_DIV: 5,              // 흐림 반경 = 짧은 변 / 이 값
+  MIN_REG: 0.012,           // 가림 영역의 최소 크기(화면 대비)
+  MAX_PIXELS: 120e6,        // 이보다 큰 사진은 열지 않는다(메모리 보호)
+};
+const MB = 1024 * 1024;
+
+/* ───────────── 도우미 ───────────── */
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const fmtSize = b => b >= 10 * MB ? `${(b / MB).toFixed(0)}MB` : b >= MB ? `${(b / MB).toFixed(1)}MB` : `${Math.max(1, Math.round(b / 1024))}KB`;
+function toast(msg, ms = 3800) {
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = msg;
+  $('toasts').append(t);
+  setTimeout(() => t.remove(), ms);
+}
+function notice(id, text) {
+  if (document.querySelector(`.notice[data-id="${id}"]`)) return;
+  const n = document.createElement('div');
+  n.className = 'notice'; n.dataset.id = id;
+  const s = document.createElement('span'); s.textContent = text;
+  const b = document.createElement('button'); b.className = 'btn xs'; b.type = 'button'; b.textContent = '닫기';
+  b.onclick = () => n.remove();
+  n.append(s, b); $('notices').append(n);
+}
+function download(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+function el(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) { if (k === 'class') e.className = v; else if (k === 'text') e.textContent = v; else e[k] = v; }
+  e.append(...kids);
+  return e;
+}
+
+/* ───────────── 상태 ─────────────
+   사진 하나: { id, file, name, kind, w, h, rot, regions, meta, out, outKey, stale, err, card }
+   w × h는 사진에 적힌 방향(EXIF)까지 반영한 크기, rot는 사용자가 더 돌린 각도.
+   가림 영역(regions)은 돌린 뒤의 화면을 0~1로 본 좌표다. */
+const state = {
+  photos: [],
+  view: 'list', cur: null, selReg: null,
+  style: 'mosaic',
+  S: { side: 1920, fmt: 'jpeg', q: 'mid', maxKB: 0 },
+  dirty: false,
+};
+let seq = 0, regSeq = 0;
+const byId = id => state.photos.find(p => p.id === id) || null;
+const curPhoto = () => byId(state.cur);
+
+/* ───────────── 사진 풀기 ───────────── */
+const HEIC_BRANDS = ['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'mif1', 'msf1'];
+async function sniffKind(file) {
+  const u = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  const s = String.fromCharCode(...u);
+  if (u[0] === 0xFF && u[1] === 0xD8) return 'jpeg';
+  if (s.startsWith('\x89PNG')) return 'png';
+  if (s.slice(0, 4) === 'RIFF' && s.slice(8, 12) === 'WEBP') return 'webp';
+  if (s.slice(4, 8) === 'ftyp') { const b = s.slice(8, 12); if (HEIC_BRANDS.includes(b)) return 'heic'; if (b === 'avif' || b === 'avis') return 'avif'; }
+  if (s.startsWith('GIF8')) return 'gif';
+  if (/\.hei[cf]$/i.test(file.name)) return 'heic';
+  return 'other';
+}
+let heicWorker = null, heicSeq = 0;
+const heicWait = new Map();
+function decodeHeic(file) {
+  if (!heicWorker) {
+    heicWorker = new Worker('./heic-worker.js', { type: 'module' });
+    heicWorker.onmessage = e => { const w = heicWait.get(e.data.id); if (w) { heicWait.delete(e.data.id); e.data.error ? w.rej(new Error(e.data.error)) : w.res(e.data); } };
+    heicWorker.onerror = () => { for (const w of heicWait.values()) w.rej(new Error('HEIC 도구를 불러오지 못했습니다')); heicWait.clear(); heicWorker = null; };
+  }
+  return file.arrayBuffer().then(buf => new Promise((res, rej) => {
+    const id = ++heicSeq;
+    heicWait.set(id, { res, rej });
+    heicWorker.postMessage({ id, buf }, [buf]);
+  })).then(r => createImageBitmap(new ImageData(new Uint8ClampedArray(r.data), r.w, r.h)));
+}
+/* 방향 정보(EXIF)를 반영해서 똑바로 선 그림을 돌려준다 */
+function decode(p) { return p.kind === 'heic' ? decodeHeic(p.file) : createImageBitmap(p.file, { imageOrientation: 'from-image' }); }
+/* 가리기 화면에 띄운 사진은 한 장만 풀어서 들고 있는다. 나머지는 쓸 때마다 풀고 바로 버린다. */
+let held = null;    // { id, bmp }
+async function withBitmap(p, fn) {
+  if (held && held.id === p.id) return fn(held.bmp);
+  const bmp = await decode(p);
+  try { return await fn(bmp); } finally { if (!(held && held.bmp === bmp)) bmp.close(); }
+}
+
+/* ───────────── 사진에 든 정보 읽기(EXIF) ─────────────
+   위치 정보가 들어 있는지 알려 주려고 읽는다. 저장본에는 어떤 정보도 넣지 않는다. */
+function parseTiff(dv, t0) {
+  const le = dv.getUint16(t0) === 0x4949;
+  const u16 = o => dv.getUint16(o, le), u32 = o => dv.getUint32(o, le);
+  if (u16(t0 + 2) !== 42) return null;
+  const readIFD = off => {
+    const out = new Map(), base = t0 + off;
+    if (base + 2 > dv.byteLength) return out;
+    const n = u16(base);
+    for (let i = 0; i < n; i++) {
+      const e = base + 2 + i * 12;
+      if (e + 12 > dv.byteLength) break;
+      out.set(u16(e), { type: u16(e + 2), count: u32(e + 4), at: e + 8 });
+    }
+    return out;
+  };
+  const ascii = t => { if (!t || t.type !== 2) return ''; const o = t.count > 4 ? t0 + u32(t.at) : t.at; let s = ''; for (let i = 0; i < t.count - 1 && o + i < dv.byteLength; i++) s += String.fromCharCode(dv.getUint8(o + i)); return s.trim(); };
+  const rat3 = t => { if (!t || t.type !== 5 || t.count < 3) return null; const o = t0 + u32(t.at); if (o + 24 > dv.byteLength) return null; const v = i => u32(o + i * 8) / (u32(o + i * 8 + 4) || 1); return v(0) + v(1) / 60 + v(2) / 3600; };
+  const ifd0 = readIFD(u32(t0 + 4)), meta = { gps: false, make: ascii(ifd0.get(0x010F)), model: ascii(ifd0.get(0x0110)), date: '' };
+  const exifPtr = ifd0.get(0x8769), gpsPtr = ifd0.get(0x8825);
+  if (exifPtr) meta.date = ascii(readIFD(u32(exifPtr.at)).get(0x9003));
+  if (gpsPtr) {
+    const g = readIFD(u32(gpsPtr.at)), lat = rat3(g.get(2)), lon = rat3(g.get(4));
+    if (lat != null && lon != null && (lat || lon)) {
+      meta.gps = true;
+      meta.lat = lat * (ascii(g.get(1)) === 'S' ? -1 : 1); meta.lon = lon * (ascii(g.get(3)) === 'W' ? -1 : 1);
+    }
+  }
+  return meta;
+}
+/* HEIC 파일의 목차(meta 상자)를 읽어 Exif 항목이 파일의 어디에 있는지 돌려준다 */
+function heifExifRange(dv) {
+  try {
+    const u32 = o => dv.getUint32(o), str = o => String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3));
+    function* boxes(start, end) {
+      for (let o = start; o + 8 <= end;) {
+        let size = u32(o), hdr = 8;
+        if (size === 1) { size = Number(dv.getBigUint64(o + 8)); hdr = 16; } else if (size === 0) size = end - o;
+        if (size < hdr) return;
+        yield { type: str(o + 4), start: o + hdr, end: Math.min(end, o + size) };
+        o += size;
+      }
+    }
+    let meta = null;
+    for (const b of boxes(0, dv.byteLength)) if (b.type === 'meta') { meta = b; break; }
+    if (!meta) return null;
+    let exifId = null, iloc = null;
+    for (const b of boxes(meta.start + 4, meta.end)) {
+      if (b.type === 'iloc') iloc = b;
+      if (b.type !== 'iinf') continue;
+      for (const e of boxes(b.start + 4 + (dv.getUint8(b.start) === 0 ? 2 : 4), b.end)) {      // 항목 목록
+        const v = dv.getUint8(e.start);
+        if (e.type !== 'infe' || v < 2) continue;
+        const idSize = v === 2 ? 2 : 4;
+        if (str(e.start + 4 + idSize + 2) === 'Exif') exifId = idSize === 2 ? dv.getUint16(e.start + 4) : u32(e.start + 4);
+      }
+    }
+    if (exifId == null || !iloc) return null;
+    const ver = dv.getUint8(iloc.start);                                                         // 항목 위치표
+    let o = iloc.start + 4;
+    const rd = n => { let v = 0; for (let i = 0; i < n; i++) v = v * 256 + dv.getUint8(o++); return v; };
+    const b1 = rd(1), b2 = rd(1), offSize = b1 >> 4, lenSize = b1 & 15, baseSize = b2 >> 4, idxSize = ver ? b2 & 15 : 0;
+    const count = rd(ver < 2 ? 2 : 4);
+    for (let i = 0; i < count; i++) {
+      const id = rd(ver < 2 ? 2 : 4), method = ver ? rd(2) & 15 : 0;
+      rd(2);
+      const base = rd(baseSize), extents = rd(2);
+      let first = null;
+      for (let j = 0; j < extents; j++) { if (idxSize) rd(idxSize); const off = rd(offSize), len = rd(lenSize); if (!j) first = { off: base + off, len }; }
+      if (id === exifId && first && method === 0) return first;
+    }
+  } catch { /* 구조가 달라 읽지 못함 */ }
+  return null;
+}
+async function readMeta(file, kind) {
+  try {
+    const buf = await file.slice(0, kind === 'heic' ? 2 * MB : 256 * 1024).arrayBuffer(), dv = new DataView(buf), u = new Uint8Array(buf);
+    if (kind === 'jpeg') {
+      for (let o = 2; o + 4 < u.length && u[o] === 0xFF;) {
+        const m = u[o + 1], len = dv.getUint16(o + 2);
+        if (m === 0xE1 && String.fromCharCode(...u.subarray(o + 4, o + 8)) === 'Exif') return parseTiff(dv, o + 10);
+        if (m === 0xDA) break;
+        o += 2 + len;
+      }
+      return { gps: false };
+    }
+    if (kind === 'heic') {
+      // 파일 앞쪽 목차(meta)에서 Exif가 놓인 자리를 찾아 그 부분만 읽는다
+      const at = heifExifRange(dv);
+      if (at) {
+        const eb = await file.slice(at.off, at.off + Math.min(at.len, 256 * 1024)).arrayBuffer(), ev = new DataView(eb);
+        const r = parseTiff(ev, 4 + ev.getUint32(0));
+        if (r) return r;
+      }
+      // 목차를 읽지 못하면 'Exif\0\0' 표시를 직접 찾아본다
+      for (let o = 0; o + 14 < u.length; o++) {
+        if (u[o] === 0x45 && u[o + 1] === 0x78 && u[o + 2] === 0x69 && u[o + 3] === 0x66 && u[o + 4] === 0 && u[o + 5] === 0) {
+          const a = u[o + 6], b = u[o + 7];
+          if ((a === 0x4D && b === 0x4D) || (a === 0x49 && b === 0x49)) { const r = parseTiff(dv, o + 6); if (r) return r; }
+        }
+      }
+      return null;     // 못 찾음(들어 있을 수도 있다)
+    }
+  } catch { /* 읽지 못해도 저장에는 영향이 없다 */ }
+  return kind === 'heic' ? null : { gps: false };
+}
+
+/* ───────────── 그리기 ───────────── */
+function outDims(p, side) {
+  const dw = p.rot % 180 ? p.h : p.w, dh = p.rot % 180 ? p.w : p.h;
+  const k = side ? Math.min(1, side / Math.max(dw, dh)) : 1;
+  return { W: Math.max(1, Math.round(dw * k)), H: Math.max(1, Math.round(dh * k)) };
+}
+const scratch = document.createElement('canvas'), sctx = scratch.getContext('2d', { willReadFrequently: false });
+function cover(ctx, W, H, r) {
+  const x = Math.round(r.x * W), y = Math.round(r.y * H), w = Math.max(2, Math.round(r.w * W)), h = Math.max(2, Math.round(r.h * H));
+  if (r.style === 'fill') { ctx.fillStyle = '#1b2530'; ctx.fillRect(x, y, w, h); return; }
+  if (r.style === 'blur') {
+    const rad = Math.max(2, Math.min(w, h) / CFG.BLUR_DIV), m = Math.ceil(rad * 2);
+    const sx = Math.max(0, x - m), sy = Math.max(0, y - m), sw = Math.min(W, x + w + m) - sx, sh = Math.min(H, y + h + m) - sy;
+    scratch.width = sw; scratch.height = sh;
+    sctx.filter = `blur(${rad}px)`; sctx.drawImage(ctx.canvas, sx, sy, sw, sh, 0, 0, sw, sh); sctx.filter = 'none';
+    ctx.drawImage(scratch, x - sx, y - sy, w, h, x, y, w, h);
+    return;
+  }
+  // 모자이크: 아주 작게 줄였다가 뭉툭하게 다시 키운다
+  const cell = Math.max(2, Math.min(w, h) / CFG.MOSAIC_CELLS), cols = Math.max(1, Math.round(w / cell)), rows = Math.max(1, Math.round(h / cell));
+  scratch.width = cols; scratch.height = rows;
+  sctx.imageSmoothingEnabled = true; sctx.imageSmoothingQuality = 'high';
+  sctx.drawImage(ctx.canvas, x, y, w, h, 0, 0, cols, rows);
+  ctx.save(); ctx.imageSmoothingEnabled = false; ctx.drawImage(scratch, 0, 0, cols, rows, x, y, w, h); ctx.restore();
+}
+/* 사진을 돌리고, 줄이고, 가림을 입힌다. 목록 그림·가리기 화면·저장본이 모두 이 함수를 쓴다. */
+function paint(ctx, W, H, p, bmp, bg) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (bg) { ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H); } else ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.translate(W / 2, H / 2); ctx.rotate(p.rot * Math.PI / 180);
+  const iw = p.rot % 180 ? H : W, ih = p.rot % 180 ? W : H;
+  ctx.drawImage(bmp, -iw / 2, -ih / 2, iw, ih);
+  ctx.restore();
+  for (const r of p.regions) cover(ctx, W, H, r);
+}
+
+/* ───────────── 저장본 만들기 ───────────── */
+const outCv = document.createElement('canvas'), outCtx = outCv.getContext('2d');
+const toBlob = (cv, type, q) => new Promise((res, rej) => cv.toBlob(b => (b ? res(b) : rej(new Error('그림을 만들지 못했습니다'))), type, q));
+const outFmt = p => state.S.fmt === 'webp' ? 'webp' : state.S.fmt === 'keep' && p.kind === 'png' ? 'png' : 'jpeg';
+async function encode(p, bmp) {
+  const S = state.S, fmt = outFmt(p), mime = 'image/' + fmt, maxB = S.maxKB * 1024, q0 = CFG.QUAL[S.q];
+  let side = S.side, res = null;
+  for (let tries = 0; tries < 7; tries++) {
+    const { W, H } = outDims(p, side);
+    outCv.width = W; outCv.height = H;
+    paint(outCtx, W, H, p, bmp, fmt === 'jpeg' ? '#fff' : null);
+    let blob = await toBlob(outCv, mime, q0);
+    res = { blob, w: W, h: H, fmt, over: false };
+    if (!maxB || blob.size <= maxB) return res;
+    if (fmt !== 'png') {            // 화질을 낮춰서 맞춰 본다
+      const low = await toBlob(outCv, mime, CFG.MIN_QUAL);
+      if (low.size <= maxB) {
+        let lo = CFG.MIN_QUAL, hi = q0, best = low;
+        for (let i = 0; i < 5; i++) { const mid = (lo + hi) / 2, b = await toBlob(outCv, mime, mid); if (b.size <= maxB) { best = b; lo = mid; } else hi = mid; }
+        return { ...res, blob: best };
+      }
+      blob = low; res = { ...res, blob };
+    }
+    // 그래도 넘으면 크기를 줄여서 다시
+    const next = Math.floor(Math.max(W, H) * clamp(Math.sqrt(maxB / blob.size) * 0.95, 0.5, 0.9));
+    if (next < 160) break;
+    side = next;
+  }
+  return { ...res, over: true };
+}
+const keyOf = p => JSON.stringify([state.S, p.rot, p.regions]);
+function touch(p) { p.stale = true; schedule(); }
+function touchAll() { for (const p of state.photos) p.stale = true; schedule(); }
+let pumpTimer = 0, pumping = false;
+function schedule(ms = 250) { clearTimeout(pumpTimer); pumpTimer = setTimeout(pump, ms); }
+async function pump() {
+  if (pumping) return;
+  pumping = true;
+  try {
+    for (;;) {
+      const p = state.photos.find(x => x.stale && !x.err && !(dragging && x.id === state.cur));
+      if (!p) break;
+      const key = keyOf(p);
+      p.stale = false; p.busy = true; refreshCard(p); renderSum();
+      try {
+        await withBitmap(p, async bmp => {
+          const out = await encode(p, bmp);
+          const t = outDims(p, CFG.THUMB);
+          p.thumb.width = t.W; p.thumb.height = t.H;
+          paint(p.thumb.getContext('2d'), t.W, t.H, p, bmp, '#fff');
+          if (keyOf(p) === key) { p.out = out; p.outKey = key; } else p.stale = true;
+        });
+      } catch (err) { p.err = friendly(err); console.info(p.name, err); }
+      p.busy = false; refreshCard(p); renderSum();
+    }
+  } finally { pumping = false; }
+}
+const friendly = err => /memory|allocation|too large/i.test(String(err?.message)) ? '사진이 너무 커서 열지 못했습니다' : '이 사진은 열 수 없습니다';
+
+/* ───────────── 사진 넣기·빼기 ───────────── */
+async function addFiles(files) {
+  files = [...files].filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|webp|gif|bmp|avif|hei[cf])$/i.test(f.name));
+  if (!files.length) return toast('사진 파일만 넣을 수 있습니다.');
+  files.sort((a, b) => a.name.localeCompare(b.name, 'ko', { numeric: true }));
+  for (const file of files) {
+    const p = { id: ++seq, file, name: file.name, kind: 'other', w: 0, h: 0, rot: 0, regions: [], meta: null, out: null, outKey: '', stale: false, busy: true, err: '', thumb: document.createElement('canvas') };
+    state.photos.push(p);
+    buildCard(p);
+  }
+  renderAll();
+  for (const p of state.photos.filter(x => !x.w && !x.err)) {
+    try {
+      p.kind = await sniffKind(p.file);
+      p.meta = await readMeta(p.file, p.kind);
+      await withBitmap(p, bmp => {
+        if (bmp.width * bmp.height > CFG.MAX_PIXELS) throw new Error('too large');
+        p.w = bmp.width; p.h = bmp.height;
+      });
+      if (p.kind === 'gif') notice('gif', 'GIF는 첫 장면만 사진으로 저장합니다(움직임은 사라집니다).');
+      p.stale = true;
+    } catch (err) { p.err = p.kind === 'other' ? '이 형식은 열 수 없습니다' : friendly(err); console.info(p.name, err); }
+    p.busy = false;
+    refreshCard(p); renderSum();
+    schedule(0);
+  }
+  state.dirty = true;
+}
+function removePhoto(p) {
+  state.photos = state.photos.filter(x => x !== p);
+  p.card.remove();
+  if (held && held.id === p.id) { held.bmp.close(); held = null; }
+  if (state.cur === p.id) setView('list');
+  renderAll();
+}
+
+/* ───────────── 목록 ───────────── */
+function buildCard(p) {
+  const thumb = el('button', { class: 'thumb', type: 'button', title: '눌러서 얼굴이나 이름표 가리기' }, el('span', { class: 'wait', text: '여는 중…' }));
+  thumb.onclick = () => { if (p.w && !p.err) openEditor(p.id); };
+  const bEdit = el('button', { class: 'btn xs', type: 'button', text: '가리기' }), bSave = el('button', { class: 'btn xs', type: 'button', text: '저장' });
+  const bDel = el('button', { class: 'btn xs x', type: 'button', text: '✕', title: '목록에서 빼기' });
+  bEdit.onclick = thumb.onclick; bSave.onclick = () => saveOne(p); bDel.onclick = () => removePhoto(p);
+  p.ui = { thumb, name: el('div', { class: 'c-name', text: p.name, title: p.name }), size: el('div', { class: 'c-size' }), tags: el('div', { class: 'tags' }), bEdit, bSave };
+  p.card = el('div', { class: 'card' }, thumb, el('div', { class: 'c-body' }, p.ui.name, p.ui.tags, p.ui.size, el('div', { class: 'c-acts' }, bEdit, bSave, bDel)));
+  $('grid').append(p.card);
+}
+function refreshCard(p) {
+  const u = p.ui;
+  if (p.thumb.width > 1 && p.w && !u.thumb.contains(p.thumb)) { u.thumb.textContent = ''; u.thumb.append(p.thumb); }
+  u.tags.textContent = '';
+  if (p.kind === 'heic') u.tags.append(el('span', { class: 'tag', text: 'HEIC' }));
+  if (p.meta?.gps) u.tags.append(el('span', { class: 'tag gps', text: '위치 정보 있음', title: `원본에 촬영 위치가 들어 있습니다 (위도 ${p.meta.lat.toFixed(4)}, 경도 ${p.meta.lon.toFixed(4)}). 저장본에서는 지워집니다.` }));
+  if (p.regions.length) u.tags.append(el('span', { class: 'tag cov', text: `가림 ${p.regions.length}곳` }));
+  u.size.className = 'c-size' + (p.err ? ' err' : '');
+  u.size.textContent = '';
+  if (p.err) u.size.textContent = p.err;
+  else if (!p.w) u.size.textContent = '여는 중…';
+  else {
+    u.size.append(`${p.w}×${p.h} · ${fmtSize(p.file.size)}`, el('br'));
+    const fresh = p.out && p.outKey === keyOf(p);
+    if (fresh) u.size.append('→ ', el('b', { text: `${p.out.w}×${p.out.h} · ${fmtSize(p.out.blob.size)}` }), p.out.over ? ' (제한보다 큼)' : '');
+    else u.size.append('→ 줄이는 중…');
+  }
+  u.bEdit.disabled = !p.w || !!p.err; u.bSave.disabled = !(p.out && p.outKey === keyOf(p));
+}
+const ready = () => state.photos.filter(p => p.out && p.outKey === keyOf(p));
+function renderSum() {
+  const all = state.photos.filter(p => !p.err), done = ready(), n = all.length;
+  const gps = state.photos.filter(p => p.meta?.gps).length, unknown = state.photos.filter(p => p.kind === 'heic' && p.meta === null).length;
+  $('gpsNote').textContent = gps ? `넣은 사진 ${gps}장에 촬영 위치가 들어 있습니다.` + (unknown ? ` (${unknown}장은 확인하지 못했습니다.)` : '') : unknown ? `${unknown}장은 위치 정보가 있는지 확인하지 못했습니다. 저장본에서는 어느 쪽이든 지워집니다.` : n ? '넣은 사진에서 촬영 위치는 발견되지 않았습니다.' : '';
+  const sum = $('sum');
+  sum.textContent = '';
+  if (!n) sum.textContent = state.photos.length ? '열 수 있는 사진이 없습니다.' : '사진을 넣으면 여기에 줄어든 용량이 나옵니다.';
+  else {
+    const a = done.reduce((s, p) => s + p.file.size, 0), b = done.reduce((s, p) => s + p.out.blob.size, 0);
+    sum.append(`사진 ${n}장`, el('br'));
+    if (done.length) sum.append(`${fmtSize(a)} → `, el('b', { text: fmtSize(b) }), b < a ? ` (${Math.round((1 - b / a) * 100)}% 줄어듦)` : '');
+    const cov = state.photos.reduce((s, p) => s + p.regions.length, 0);
+    if (cov) sum.append(el('br'), `가린 곳 ${cov}군데`);
+  }
+  const left = all.length - done.length, pr = $('prog');
+  pr.textContent = '';
+  if (left) { const bar = el('div', { class: 'bar' }, el('i')); bar.firstChild.style.width = Math.round(done.length / n * 100) + '%'; pr.append(bar, `줄이는 중… ${done.length}/${n}`); }
+  $('btnSaveAll').disabled = !done.length || left > 0;
+  $('btnSaveAll').textContent = n > 1 ? `모두 저장 (${n}장, ZIP)` : '저장';
+}
+function renderAll() {
+  $('empty').hidden = state.photos.length > 0;
+  for (const p of state.photos) refreshCard(p);
+  renderSum();
+}
+
+/* ───────────── 저장 ───────────── */
+const EXT = { jpeg: 'jpg', png: 'png', webp: 'webp' };
+function outNames(list) {
+  const used = new Set();
+  return list.map(p => {
+    const base = p.name.replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]+/g, '_') || '사진', ext = EXT[p.out.fmt];
+    let name = `${base}.${ext}`;
+    for (let i = 2; used.has(name.toLowerCase()); i++) name = `${base} (${i}).${ext}`;
+    used.add(name.toLowerCase());
+    return name;
+  });
+}
+function saveOne(p) {
+  if (!(p.out && p.outKey === keyOf(p))) return;
+  download(p.out.blob, outNames([p])[0]);
+  state.dirty = false;
+}
+async function saveAll() {
+  const list = ready();
+  if (!list.length) return;
+  if (list.length === 1) return saveOne(list[0]);
+  const names = outNames(list), d = new Date(), pad = n => String(n).padStart(2, '0');
+  const zip = await makeZip(list.map((p, i) => ({ name: names[i], blob: p.out.blob })));
+  download(zip, `사진_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${list.length}장.zip`);
+  state.dirty = false;
+  toast(`${list.length}장을 ZIP으로 저장했습니다 (${fmtSize(zip.size)}).`);
+}
+/* 압축하지 않는 ZIP. 사진은 이미 압축돼 있어 다시 압축해도 줄지 않는다 */
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+async function makeZip(files) {
+  const enc = new TextEncoder(), parts = [], central = []; let offset = 0, cdSize = 0;
+  const d = new Date();
+  const time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+  const date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+  for (const f of files) {
+    const name = enc.encode(f.name), data = new Uint8Array(await f.blob.arrayBuffer()), crc = crc32(data);
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);   // 0x0800: 파일명이 UTF-8
+    lh.setUint16(10, time, true); lh.setUint16(12, date, true); lh.setUint32(14, crc, true);
+    lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true); lh.setUint16(26, name.length, true);
+    parts.push(lh.buffer, name, f.blob);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
+    ch.setUint16(12, time, true); ch.setUint16(14, date, true); ch.setUint32(16, crc, true);
+    ch.setUint32(20, data.length, true); ch.setUint32(24, data.length, true); ch.setUint16(28, name.length, true); ch.setUint32(42, offset, true);
+    central.push(ch.buffer, name);
+    offset += 30 + name.length + data.length; cdSize += 46 + name.length;
+  }
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, end.buffer], { type: 'application/zip' });
+}
+
+/* ───────────── 가리기 화면 ───────────── */
+const cv = $('cv'), cx = cv.getContext('2d');
+let dragging = false, openSeq = 0;
+function setView(v) {
+  state.view = v;
+  $('listView').hidden = v !== 'list'; $('editView').hidden = v !== 'edit';
+  if (v === 'list') {
+    state.cur = null; state.selReg = null;
+    if (held) { held.bmp.close(); held = null; }
+    schedule(0);
+  }
+}
+async function openEditor(id) {
+  const p = byId(id); if (!p || !p.w || p.err) return;
+  const my = ++openSeq;
+  state.cur = id; state.selReg = null;
+  setView('edit');
+  const list = state.photos.filter(x => x.w && !x.err), i = list.indexOf(p);
+  $('edName').textContent = p.name; $('edName').title = p.name;
+  $('edPos').textContent = `${i + 1} / ${list.length}`;
+  $('btnPrev').disabled = i <= 0; $('btnNext').disabled = i >= list.length - 1;
+  $('pbox').hidden = true; $('edWait').hidden = false; $('edWait').textContent = p.kind === 'heic' ? '아이폰 사진을 여는 중… (몇 초 걸립니다)' : '사진을 여는 중…';
+  renderStyle();
+  if (!(held && held.id === id)) {
+    if (held) { held.bmp.close(); held = null; }
+    let bmp;
+    try { bmp = await decode(p); } catch (err) { if (my === openSeq) { toast('이 사진은 열 수 없습니다.'); setView('list'); } return; }
+    if (my !== openSeq || state.cur !== id) { bmp.close(); return; }
+    held = { id, bmp };
+  }
+  $('edWait').hidden = true; $('pbox').hidden = false;
+  layoutEditor(); renderRegs();
+}
+function layoutEditor() {
+  const p = curPhoto(); if (!p || !held || state.view !== 'edit') return;
+  const d = outDims(p, 0), st = $('stage'), aw = st.clientWidth - 40, ah = st.clientHeight - 60;
+  const k = Math.min(aw / d.W, ah / d.H, 1.5);
+  const w = Math.max(40, Math.floor(d.W * k)), h = Math.max(40, Math.floor(d.H * k));
+  $('pbox').style.width = w + 'px'; $('pbox').style.height = h + 'px';
+  const dpr = Math.min(2, window.devicePixelRatio || 1), W = Math.min(d.W, Math.round(w * dpr)), H = Math.min(d.H, Math.round(h * dpr));
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  drawEditor();
+}
+function drawEditor() {
+  const p = curPhoto(); if (!p || !held || held.id !== p.id) return;
+  paint(cx, cv.width, cv.height, p, held.bmp, '#fff');
+}
+function renderRegs() {
+  const p = curPhoto(), layer = $('regLayer');
+  layer.textContent = '';
+  if (!p) return;
+  for (const r of p.regions) {
+    const d = el('div', { class: 'reg' + (r.id === state.selReg ? ' sel' : '') + (r.y < 0.08 ? ' top0' : '') });
+    d.dataset.id = r.id;
+    d.style.cssText = `left:${r.x * 100}%;top:${r.y * 100}%;width:${r.w * 100}%;height:${r.h * 100}%`;
+    for (const h of ['nw', 'ne', 'sw', 'se']) { const i = document.createElement('i'); i.dataset.h = h; d.append(i); }
+    d.append(el('b', { text: '×', title: '이 가림 지우기 (Delete)' }));
+    layer.append(d);
+  }
+  $('edHint').hidden = p.regions.length > 0;
+  $('btnClear').disabled = !p.regions.length;
+}
+function renderStyle() {
+  const p = curPhoto(), r = p?.regions.find(x => x.id === state.selReg), v = r ? r.style : state.style;
+  for (const b of $('styleSeg').children) b.classList.toggle('on', b.dataset.v === v);
+}
+function changed(p) { drawEditor(); renderRegs(); renderStyle(); refreshCard(p); state.dirty = true; touch(p); }
+$('regLayer').addEventListener('pointerdown', ev => {
+  const p = curPhoto(); if (ev.button !== 0 || !p) return;
+  const layer = $('regLayer'), box = layer.getBoundingClientRect();
+  const P = e => ({ x: clamp((e.clientX - box.left) / box.width, 0, 1), y: clamp((e.clientY - box.top) / box.height, 0, 1) });
+  const regEl = ev.target.closest('.reg'), reg = regEl ? p.regions.find(r => r.id === Number(regEl.dataset.id)) : null;
+  if (reg && ev.target.tagName === 'B') { p.regions = p.regions.filter(r => r !== reg); state.selReg = null; return changed(p); }
+  const hd = ev.target.dataset.h, p0 = P(ev), r0 = reg ? { ...reg } : null;
+  layer.setPointerCapture(ev.pointerId); ev.preventDefault();
+  dragging = true;
+  let cur = reg, moved = false;
+  if (reg) { state.selReg = reg.id; renderRegs(); renderStyle(); }
+  const move = e => {
+    const q = P(e);
+    if (!cur) {          // 빈 곳에서 끌기 시작: 새 가림
+      if (Math.abs(q.x - p0.x) < 0.006 && Math.abs(q.y - p0.y) < 0.006) return;
+      cur = { id: ++regSeq, x: p0.x, y: p0.y, w: 0, h: 0, style: state.style };
+      p.regions.push(cur); state.selReg = cur.id;
+    }
+    moved = true;
+    if (r0 && !hd) { cur.x = clamp(r0.x + q.x - p0.x, 0, 1 - r0.w); cur.y = clamp(r0.y + q.y - p0.y, 0, 1 - r0.h); }
+    else {
+      // 고정되는 모서리(누른 손잡이의 맞은편)와 지금 위치로 네모를 만든다
+      const ax = r0 ? (hd.includes('w') ? r0.x + r0.w : r0.x) : p0.x, ay = r0 ? (hd.includes('n') ? r0.y + r0.h : r0.y) : p0.y;
+      cur.x = Math.min(ax, q.x); cur.y = Math.min(ay, q.y); cur.w = Math.abs(q.x - ax); cur.h = Math.abs(q.y - ay);
+    }
+    drawEditor(); renderRegs();
+  };
+  const up = () => {
+    layer.removeEventListener('pointermove', move); layer.removeEventListener('pointerup', up); layer.removeEventListener('pointercancel', up);
+    dragging = false;
+    if (cur && (cur.w < CFG.MIN_REG || cur.h < CFG.MIN_REG)) { if (r0) Object.assign(cur, r0); else { p.regions = p.regions.filter(r => r !== cur); state.selReg = null; } }
+    if (!reg && !moved) state.selReg = null;      // 빈 곳을 그냥 누르면 선택 해제
+    changed(p);
+  };
+  layer.addEventListener('pointermove', move); layer.addEventListener('pointerup', up); layer.addEventListener('pointercancel', up);
+});
+function rotate() {
+  const p = curPhoto(); if (!p) return;
+  p.rot = (p.rot + 90) % 360;
+  p.regions = p.regions.map(r => ({ ...r, x: 1 - r.y - r.h, y: r.x, w: r.h, h: r.w }));     // 가림도 같이 돌린다
+  layoutEditor(); changed(p);
+}
+function step(dir) {
+  const list = state.photos.filter(x => x.w && !x.err), i = list.findIndex(x => x.id === state.cur);
+  if (list[i + dir]) openEditor(list[i + dir].id);
+}
+function deleteSel() {
+  const p = curPhoto(); if (!p || state.selReg == null) return;
+  p.regions = p.regions.filter(r => r.id !== state.selReg); state.selReg = null;
+  changed(p);
+}
+// 제목을 누르면 처음 화면으로: 사진 목록 맨 위 (넣은 사진, 가림, 설정은 그대로 둠)
+function goHome() {
+  if (state.view !== 'list') setView('list');
+  $('listView').scrollTop = 0;
+  scrollTo(0, 0); document.body.scrollTop = 0;
+}
+
+/* ───────────── 입력 연결 ───────────── */
+$('homeLink').addEventListener('click', e => { e.preventDefault(); goHome(); });
+$('btnAdd').onclick = $('btnAdd2').onclick = () => $('file').click();
+$('file').onchange = e => { const f = [...e.target.files]; e.target.value = ''; addFiles(f); };
+$('btnSaveAll').onclick = saveAll;
+$('btnBack').onclick = () => setView('list');
+$('btnPrev').onclick = () => step(-1); $('btnNext').onclick = () => step(1);
+$('btnRot').onclick = rotate;
+$('btnClear').onclick = () => { const p = curPhoto(); if (p && p.regions.length) { p.regions = []; state.selReg = null; changed(p); } };
+$('styleSeg').onclick = e => {
+  const v = e.target.dataset.v; if (!v) return;
+  state.style = v;
+  const p = curPhoto(), r = p?.regions.find(x => x.id === state.selReg);
+  if (r) { r.style = v; changed(p); } else renderStyle();
+};
+const bindOpt = (id, key, num) => {
+  $(id).value = String(state.S[key]);
+  $(id).onchange = e => { state.S[key] = num ? Number(e.target.value) : e.target.value; if (byPointer) e.target.blur(); renderAll(); touchAll(); };
+};
+bindOpt('optSide', 'side', true); bindOpt('optFmt', 'fmt'); bindOpt('optQ', 'q'); bindOpt('optMax', 'maxKB', true);
+
+// 마우스로 누른 버튼·선택 상자에 포커스가 남아 단축키를 가로채는 일을 막는다
+let byPointer = false;
+document.addEventListener('pointerdown', () => { byPointer = true; }, true);
+document.addEventListener('keydown', () => { byPointer = false; }, true);
+document.addEventListener('click', e => { const b = e.target.closest('button'); if (b && e.detail > 0) b.blur(); });
+
+document.addEventListener('keydown', e => {
+  if (e.target.closest?.('#homeLink')) return;      // 제목에 초점이 있을 때 Enter는 처음 화면으로
+  if (e.target.matches?.('select, input') || e.ctrlKey || e.metaKey || e.altKey || state.view !== 'edit') return;
+  switch (e.key) {
+    case 'Escape': if (state.selReg != null) { state.selReg = null; renderRegs(); renderStyle(); } else setView('list'); break;
+    case 'Delete': case 'Backspace': e.preventDefault(); deleteSel(); break;
+    case 'ArrowLeft': e.preventDefault(); step(-1); break;
+    case 'ArrowRight': e.preventDefault(); step(1); break;
+  }
+});
+
+// 끌어다 놓기, 붙여 넣기(캡처한 화면)
+let dragDepth = 0;
+const hasFiles = e => [...(e.dataTransfer?.types || [])].includes('Files');
+window.addEventListener('dragenter', e => { if (hasFiles(e)) { e.preventDefault(); dragDepth++; $('left').classList.add('drag'); } });
+window.addEventListener('dragover', e => { if (hasFiles(e)) e.preventDefault(); });
+window.addEventListener('dragleave', e => { if (hasFiles(e) && --dragDepth <= 0) { dragDepth = 0; $('left').classList.remove('drag'); } });
+window.addEventListener('drop', e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault(); dragDepth = 0; $('left').classList.remove('drag');
+  addFiles(e.dataTransfer.files);
+});
+window.addEventListener('paste', e => {
+  const files = [...(e.clipboardData?.files || [])].filter(f => /^image\//.test(f.type));
+  if (!files.length) return;
+  e.preventDefault();
+  const d = new Date(), pad = n => String(n).padStart(2, '0');
+  addFiles(files.map((f, i) => new File([f], f.name && f.name !== 'image.png' ? f.name : `붙여넣기_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}${i ? '_' + (i + 1) : ''}.png`, { type: f.type })));
+});
+
+new ResizeObserver(() => layoutEditor()).observe($('stage'));
+// 저장하지 않은 사진이 있으면 탭을 닫기 전에 경고한다
+window.addEventListener('beforeunload', e => { if (state.dirty && state.photos.length) { e.preventDefault(); e.returnValue = ''; } });
+
+renderAll();
+</script>
+</body>
+</html>

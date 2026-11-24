@@ -1,0 +1,1067 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- 이 페이지는 자기 자신(같은 주소)에서 받은 파일만 불러올 수 있다. 바깥으로 나가는 요청은 브라우저가 막는다. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self' blob:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>한글 문서 변환</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%236d3fc8'/%3E%3Cpath d='M8 6h9l5 5v15H8z' fill='%23fff'/%3E%3Cpath d='M11 20v-5l2.5 3 2.5-3v5' fill='none' stroke='%236d3fc8' stroke-width='1.6' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f3f5f8; --panel: #ffffff; --line: #dde3ea; --line2: #c9d1db;
+  --text: #1b2530; --muted: #657282; --accent: #1769e0; --accent-soft: #e8f0fd;
+  --danger: #d43c3c; --warn-bg: #fff6dd; --warn-text: #7a5600; --ok: #1f7a45; --ok-bg: #e6f5ec;
+  --radius: 8px;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.45 "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 13px; white-space: nowrap;
+  border: 1px solid var(--line2); border-radius: 7px; background: #fff; color: var(--text); cursor: pointer;
+}
+.btn:hover:not(:disabled) { border-color: #9aa7b6; background: #f8fafc; }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.btn.primary:hover:not(:disabled) { background: #0f58c4; border-color: #0f58c4; }
+.btn.sm { height: 30px; padding: 0 10px; font-size: 13px; }
+.btn.xs { height: 26px; padding: 0 8px; font-size: 12px; border-radius: 6px; }
+select, input[type=text] { height: 32px; padding: 0 8px; border: 1px solid var(--line2); border-radius: 7px; background: #fff; min-width: 0; }
+textarea { border: 1px solid var(--line2); border-radius: 7px; padding: 7px 9px; background: #fff; width: 100%; resize: vertical; line-height: 1.5; }
+select:focus-visible, button:focus-visible, a:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* 상단 */
+.top {
+  display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--panel);
+  border-bottom: 1px solid var(--line); flex-wrap: wrap;
+}
+.top h1 { font-size: 17px; margin: 0 8px 0 0; letter-spacing: -.01em; white-space: nowrap; }
+/* 도구 목록(연경쌤의 업무 도구함)으로 돌아가는 링크 */
+a.hub {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 11px 0 6px; white-space: nowrap;
+  border: 1px solid var(--line2); border-radius: 7px; color: var(--muted); text-decoration: none; font-size: 13px;
+}
+a.hub img { width: 22px; height: 22px; border-radius: 5px; display: block; }
+a.hub:hover { border-color: #9aa7b6; background: #f8fafc; color: var(--text); }
+/* 제목을 누르면 처음 화면으로 */
+a.brand { color: inherit; text-decoration: none; border-radius: 8px; margin: -4px 0; padding: 4px 0; -webkit-tap-highlight-color: transparent; }
+@media (hover: hover) { a.brand:hover h1 { color: var(--accent); } }
+.spacer { flex: 1; }
+.local-note {
+  display: flex; align-items: center; gap: 6px; color: var(--ok); background: var(--ok-bg);
+  border-radius: 999px; padding: 4px 11px; font-size: 12.5px; font-weight: 600; white-space: nowrap;
+}
+#notices:empty { display: none; }
+.notice {
+  padding: 8px 16px; background: var(--warn-bg); color: var(--warn-text); font-size: 13px;
+  border-bottom: 1px solid #f0e2b4; display: flex; gap: 10px; align-items: center;
+}
+.notice button { margin-left: auto; }
+
+/* 본문 */
+main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 380px; min-height: 0; }
+.left { display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }
+.left.drag::after {
+  content: "여기에 놓으면 추가합니다"; position: absolute; inset: 10px; border: 2px dashed #6ea8ff; border-radius: 12px;
+  background: rgba(23, 105, 224, .16); color: var(--accent); display: grid; place-items: center; font-size: 18px; font-weight: 600; z-index: 5; pointer-events: none;
+}
+.bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 13px; }
+#docName { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+#docStat { color: var(--muted); white-space: nowrap; }
+.seg { display: inline-flex; border: 1px solid var(--line2); border-radius: 7px; overflow: hidden; flex: none; }
+.seg button { border: 0; background: #fff; height: 28px; padding: 0 12px; font-size: 12.5px; cursor: pointer; border-left: 1px solid var(--line2); }
+.seg button:first-child { border-left: 0; }
+.seg button[aria-selected=true] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+#scroller { flex: 1; overflow: auto; padding: 18px; }
+.empty { max-width: 580px; margin: 7vh auto 0; text-align: center; border: 2px dashed var(--line2); border-radius: 14px; padding: 34px 24px; background: #fff; }
+.empty h2 { font-size: 19px; margin: 0 0 6px; }
+.empty p { margin: 0 0 18px; color: var(--muted); text-wrap: balance; }
+.empty ol { text-align: left; margin: 20px auto 0; padding: 0 0 0 20px; color: var(--muted); font-size: 13px; line-height: 1.9; max-width: 460px; }
+.empty .tip { margin: 16px auto 0; font-size: 12.5px; color: var(--warn-text); background: var(--warn-bg); border-radius: 8px; padding: 8px 12px; max-width: 460px; text-align: left; line-height: 1.6; }
+
+/* 미리보기(문서처럼 보여 준다) */
+#preview { max-width: 860px; margin: 0 auto; background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 34px 40px; line-height: 1.7; font-size: 14.5px; overflow-wrap: anywhere; }
+#preview h1 { font-size: 22px; margin: 18px 0 10px; line-height: 1.35; }
+#preview h2 { font-size: 18px; margin: 16px 0 8px; line-height: 1.4; }
+#preview h3 { font-size: 15.5px; margin: 14px 0 6px; }
+#preview p { margin: 0 0 8px; white-space: pre-wrap; }
+#preview p.li { margin-bottom: 3px; }
+#preview .hd { color: var(--muted); margin-right: .35em; font-variant-numeric: tabular-nums; }
+#preview blockquote { margin: 0 0 10px; padding: 8px 14px; border: 1px solid var(--line2); border-radius: 6px; background: #fafbfc; }
+#preview blockquote > :last-child { margin-bottom: 0; }
+#preview table { border-collapse: collapse; margin: 6px 0 14px; font-size: 13.5px; max-width: 100%; }
+#preview td { border: 1px solid #b9c2cd; padding: 4px 8px; vertical-align: top; }
+#preview td > :last-child { margin-bottom: 0; }
+#preview td p { margin-bottom: 3px; }
+#preview .cap { color: var(--muted); font-size: 13px; margin: 8px 0 2px; }
+#preview .notes { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 10px; font-size: 13px; color: var(--muted); }
+#preview mark, .maptbl mark { background: #ffe9a8; color: #5a3b00; border-radius: 3px; padding: 0 2px; }
+#mdText { display: block; width: 100%; max-width: 980px; margin: 0 auto; min-height: 100%; background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 20px 24px; font: 13px/1.65 ui-monospace, "D2Coding", Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 2; }
+
+/* 옆 패널 */
+.side { background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.tabs { display: flex; border-bottom: 1px solid var(--line); flex: none; }
+.tab { flex: 1; border: 0; border-bottom: 2px solid transparent; background: none; padding: 11px 6px 9px; cursor: pointer; font-weight: 600; color: var(--muted); }
+.tab[aria-selected=true] { color: var(--accent); border-bottom-color: var(--accent); }
+.pane { display: none; flex: 1; overflow-y: auto; padding: 4px 14px 14px; }
+.pane.on { display: block; }
+.sec { border-bottom: 1px solid var(--line); padding: 12px 0 14px; display: flex; flex-direction: column; gap: 8px; }
+.sec:last-child { border-bottom: 0; }
+.sec h2 { font-size: 14px; margin: 0; }
+.row { display: flex; align-items: center; gap: 8px; font-size: 13px; flex-wrap: wrap; }
+.row > span:first-child { width: 58px; color: var(--muted); flex: none; }
+.row select { flex: 1; font-size: 13px; }
+.hint { color: var(--muted); font-size: 12.5px; line-height: 1.6; margin: 0; }
+.chk { display: flex; align-items: flex-start; gap: 7px; cursor: pointer; font-size: 13px; }
+.chk input { margin-top: 3px; flex: none; }
+.fld { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
+.fld > span { width: 34px; flex: none; color: var(--muted); padding-top: 7px; }
+.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.list li { display: flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+.list li.sel { border-color: var(--accent); background: var(--accent-soft); }
+.list li.err { color: var(--danger); cursor: default; }
+.list li .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list li small { color: var(--muted); white-space: nowrap; }
+.list li button { border: 0; background: none; cursor: pointer; color: var(--muted); padding: 0 2px; font-size: 12px; }
+.acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.acts .btn { flex: 1; justify-content: center; }
+.maptbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.maptbl td { padding: 3px 4px; border-bottom: 1px solid var(--line); }
+.maptbl td:last-child { text-align: right; color: var(--muted); white-space: nowrap; }
+.maptbl .kd { color: var(--muted); white-space: nowrap; }
+#piiStat { font-size: 13px; }
+#piiWarn { color: var(--warn-text); background: var(--warn-bg); border-radius: 8px; padding: 8px 11px; font-size: 12.5px; line-height: 1.6; }
+#sidFmt { width: 96px; height: 28px; font-size: 13px; }
+#rsIn, #rsOut { min-height: 130px; font-size: 13px; }
+.srclink { align-self: flex-end; font-size: 12px; color: var(--muted); margin: 0 14px 10px; }
+.srclink:hover { color: var(--text); }
+
+#toasts { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 50; align-items: center; pointer-events: none; }
+.toast { background: #1b2530; color: #fff; padding: 9px 14px; border-radius: 8px; font-size: 13px; box-shadow: 0 6px 20px rgba(0, 0, 0, .25); max-width: 80vw; }
+[hidden] { display: none !important; }
+@media (max-width: 820px) {
+  body { overflow: auto; }
+  main { grid-template-columns: 1fr; }
+  .side { border-left: 0; border-top: 1px solid var(--line); }
+  #scroller { max-height: 70vh; }
+  .local-note { display: none; }
+  #preview { padding: 20px 16px; }
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <a class="hub" href="../" title="연경쌤의 업무 도구함으로 돌아가기"><img src="../icon.svg" alt="">도구함</a>
+  <a class="brand" id="homeLink" href="#" title="처음 화면으로" aria-label="한글 문서 변환 — 처음 화면으로"><h1>한글 문서 변환</h1></a>
+  <button id="btnAdd" class="btn" type="button">＋ 문서 추가</button>
+  <input id="file" type="file" accept=".hwpx" multiple hidden>
+  <span class="spacer"></span>
+  <div class="local-note" title="모든 처리는 이 브라우저 안에서만 이루어집니다. 서버로 보내거나 저장하지 않습니다.">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.2 7V5a2.8 2.8 0 0 1 5.6 0v2"/></svg>
+    문서는 이 컴퓨터 밖으로 나가지 않습니다
+  </div>
+</header>
+
+<div id="notices"></div>
+
+<main>
+  <section class="left" id="left">
+    <div class="bar" id="bar" hidden>
+      <span class="seg" role="tablist" id="viewSeg">
+        <button type="button" role="tab" data-v="preview" aria-selected="true">미리보기</button><button type="button" role="tab" data-v="md" aria-selected="false">Markdown</button>
+      </span>
+      <span id="docName"></span>
+      <span class="spacer"></span>
+      <span id="docStat"></span>
+    </div>
+    <div id="scroller">
+      <div class="empty" id="empty">
+        <h2>한글 문서(.hwpx)를 여기에 끌어다 놓으세요</h2>
+        <p>공문이나 계획서를 AI에 넣기 좋은 Markdown으로 바꿉니다. 문단 번호와 표를 살리고, 이름은 가명으로 바꿀 수 있습니다.</p>
+        <button class="btn primary" type="button" id="btnAdd2">문서 선택</button>
+        <ol>
+          <li>문서를 넣으면 바로 바뀐 결과가 보입니다.</li>
+          <li><b>개인정보</b> 탭에 이름을 적으면 <mark style="background:#ffe9a8;border-radius:3px;padding:0 2px">[학생A]</mark> 같은 이름표로 바뀝니다.</li>
+          <li><b>복사</b>해서 AI에 붙여 넣고, 받은 답은 <b>되돌리기</b> 탭에서 실제 이름으로 바꿉니다.</li>
+        </ol>
+        <div class="tip">옛 형식(.hwp)은 읽지 못합니다. 한글에서 <b>파일 → 다른 이름으로 저장하기</b>를 눌러 파일 형식을 <b>한글 표준 문서(*.hwpx)</b>로 바꿔 저장한 뒤 넣어 주세요.</div>
+      </div>
+      <div id="preview" hidden></div>
+      <pre id="mdText" hidden tabindex="0"></pre>
+    </div>
+  </section>
+
+  <aside class="side">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="conv" aria-selected="true">변환</button>
+      <button class="tab" role="tab" data-tab="pii" aria-selected="false">개인정보</button>
+      <button class="tab" role="tab" data-tab="rs" aria-selected="false">되돌리기</button>
+    </div>
+
+    <div class="pane on" id="pane-conv">
+      <div class="sec">
+        <h2>문서</h2>
+        <ul class="list" id="fileList"></ul>
+        <p class="hint" id="fileHint">넣은 문서가 여기에 나옵니다. 여러 개를 넣을 수 있습니다.</p>
+      </div>
+      <div class="sec">
+        <h2>바꾸는 방법</h2>
+        <div class="row"><span>표</span>
+          <select id="optTable">
+            <option value="auto">자동 (합친 칸이 있으면 HTML 표)</option>
+            <option value="md">항상 Markdown 표</option>
+            <option value="html">항상 HTML 표</option>
+          </select>
+        </div>
+        <label class="chk"><input type="checkbox" id="optHead" checked><span>글자 크기가 큰 줄을 제목(#)으로</span></label>
+        <label class="chk"><input type="checkbox" id="optPic" checked><span>그림·개체가 있던 자리를 [그림]으로 표시</span></label>
+        <label class="chk"><input type="checkbox" id="optHF"><span>머리말·꼬리말도 넣기</span></label>
+        <label class="chk"><input type="checkbox" id="optMemo"><span>메모(쪽지)도 넣기 <span class="hint">— [메모: …]</span></span></label>
+      </div>
+      <div class="sec">
+        <h2>내보내기</h2>
+        <div class="acts">
+          <button class="btn primary" type="button" id="btnCopy" disabled>복사</button>
+          <button class="btn" type="button" id="btnSave" disabled>.md로 저장</button>
+        </div>
+        <div class="acts" id="allActs" hidden>
+          <button class="btn" type="button" id="btnCopyAll">모든 문서 이어서 복사</button>
+          <button class="btn" type="button" id="btnSaveAll">모두 저장 (ZIP)</button>
+        </div>
+        <p class="hint" id="outHint"></p>
+      </div>
+    </div>
+
+    <div class="pane" id="pane-pii">
+      <div class="sec">
+        <h2>1. 가명으로 바꿀 이름</h2>
+        <label class="fld"><span>학생</span><textarea id="namesStudent" rows="2" placeholder="김민지, 박준영 (줄바꿈이나 쉼표로 여러 명)" autocomplete="off" spellcheck="false"></textarea></label>
+        <label class="fld"><span>교사</span><textarea id="namesTeacher" rows="1" placeholder="이서연" autocomplete="off" spellcheck="false"></textarea></label>
+        <label class="fld"><span>학교</span><textarea id="namesSchool" rows="1" placeholder="비워 두면 ○○고등학교 같은 이름을 자동으로 찾음" autocomplete="off" spellcheck="false"></textarea></label>
+      </div>
+      <div class="sec">
+        <h2>2. 함께 바꿀 항목</h2>
+        <label class="chk"><input type="checkbox" id="optRrn" checked><span>주민등록번호 → [주민번호]</span></label>
+        <label class="chk"><input type="checkbox" id="optPhone" checked><span>휴대전화 → [전화번호]</span></label>
+        <label class="chk"><input type="checkbox" id="optEmail" checked><span>이메일 → [이메일]</span></label>
+        <div class="row">
+          <label class="chk"><input type="checkbox" id="optSid"><span>학번 → [학번]</span></label>
+          <input type="text" id="sidFmt" value="#####" title="#은 숫자 한 자리입니다. 예: ##### (5자리), 3-##-##" autocomplete="off" spellcheck="false">
+          <span class="hint"># = 숫자 한 자리</span>
+        </div>
+        <label class="chk"><input type="checkbox" id="optAddr" checked><span>주소 → [주소] <span class="hint">— "주소:" 뒤의 글, 시·도로 시작하는 도로명·지번 주소</span></span></label>
+        <label class="chk"><input type="checkbox" id="optAutoSchool" checked><span>학교 이름 자동 찾기 → [학교A] <span class="hint">— ○○초등학교·중학교·고등학교와 줄임말(○○고)</span></span></label>
+        <label class="chk"><input type="checkbox" id="optLoose" checked><span>띄어 쓴 이름도 찾기 <span class="hint">— 김 민 지</span></span></label>
+        <label class="chk"><input type="checkbox" id="optGiven"><span>성을 뺀 이름도 바꾸기 <span class="hint">— 민지. 흔한 낱말과 겹치는 이름이면 엉뚱한 곳이 바뀔 수 있습니다</span></span></label>
+      </div>
+      <div class="sec">
+        <h2>3. 바뀐 곳</h2>
+        <div id="piiStat" class="hint">문서를 넣고 이름을 적으면 여기에 대응표가 나옵니다.</div>
+        <div id="piiWarn" hidden></div>
+        <table class="maptbl" id="mapTbl"></table>
+        <p class="hint">미리보기에서 <mark style="background:#ffe9a8;border-radius:3px;padding:0 2px">노란 표시</mark>가 바뀐 곳입니다. 빠진 이름이 없는지 내보내기 전에 훑어보세요. 대응표는 어디에도 저장하지 않으므로 창을 닫으면 사라집니다.</p>
+      </div>
+    </div>
+
+    <div class="pane" id="pane-rs">
+      <div class="sec">
+        <h2>AI가 쓴 글을 실제 이름으로</h2>
+        <textarea id="rsIn" placeholder="[학생A]가 들어간 글을 여기에 붙여 넣으세요." autocomplete="off" spellcheck="false"></textarea>
+        <label class="chk"><input type="checkbox" id="rsJosa" checked><span>조사도 이름에 맞게 고치기 <span class="hint">— [학생A]는 → 김민지는 / 박준영은</span></span></label>
+        <textarea id="rsOut" readonly placeholder="바꾼 결과가 여기에 나옵니다."></textarea>
+        <div class="acts"><button class="btn primary" type="button" id="btnRsCopy" disabled>결과 복사</button></div>
+        <p class="hint" id="rsCount"></p>
+        <p class="hint" id="rsMap"></p>
+      </div>
+    </div>
+    <a class="srclink" href="https://github.com/earthssaem/tools/tree/main/hwpx" target="_blank" rel="noopener noreferrer">소스</a>
+  </aside>
+</main>
+
+<div id="toasts" aria-live="polite"></div>
+
+<script type="module">
+/* ───────────── 조정값 ───────────── */
+const CFG = {
+  H1: 1.5, H2: 1.2, H3: 1.08,     // 본문 글자 크기의 몇 배부터 제목(#, ##, ###)으로 볼지. ###은 굵은 글씨일 때만
+  HEAD_MAX: 80,                   // 이보다 긴 줄은 제목으로 보지 않는다
+  MAX_FILE: 200 * 1024 * 1024,
+};
+
+/* ───────────── 도우미 ───────────── */
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function toast(msg, ms = 3800) {
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = msg;
+  $('toasts').append(t);
+  setTimeout(() => t.remove(), ms);
+}
+function notice(id, text) {
+  if (document.querySelector(`.notice[data-id="${id}"]`)) return;
+  const n = document.createElement('div');
+  n.className = 'notice'; n.dataset.id = id;
+  const s = document.createElement('span'); s.textContent = text;
+  const b = document.createElement('button'); b.className = 'btn xs'; b.type = 'button'; b.textContent = '닫기';
+  b.onclick = () => n.remove();
+  n.append(s, b); $('notices').append(n);
+}
+function download(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+function el(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) { if (k === 'class') e.className = v; else if (k === 'text') e.textContent = v; else e[k] = v; }
+  e.append(...kids);
+  return e;
+}
+async function copyText(text, okMsg) {
+  try { await navigator.clipboard.writeText(text); }
+  catch {      // 권한이 없으면 예전 방식으로
+    const ta = el('textarea', { value: text }); ta.style.cssText = 'position:fixed;left:-9999px';
+    document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove();
+  }
+  toast(okMsg);
+}
+
+/* ───────────── ZIP 읽기 ─────────────
+   hwpx는 XML 파일들을 ZIP으로 묶은 것이다. 압축은 브라우저에 들어 있는 기능(DecompressionStream)으로 푼다. */
+async function openZip(file) {
+  const tailLen = Math.min(file.size, 66000), tail = new DataView(await file.slice(file.size - tailLen).arrayBuffer());
+  let e = -1;
+  for (let i = tailLen - 22; i >= 0; i--) if (tail.getUint32(i, true) === 0x06054b50) { e = i; break; }
+  if (e < 0) throw new Error('zip');
+  const n = tail.getUint16(e + 10, true), cdSize = tail.getUint32(e + 12, true), cdOff = tail.getUint32(e + 16, true);
+  const buf = await file.slice(cdOff, cdOff + cdSize).arrayBuffer(), cd = new DataView(buf), dec = new TextDecoder();
+  const entries = new Map();
+  for (let i = 0, o = 0; i < n && o + 46 <= cd.byteLength; i++) {
+    if (cd.getUint32(o, true) !== 0x02014b50) break;
+    const nl = cd.getUint16(o + 28, true);
+    entries.set(dec.decode(new Uint8Array(buf, o + 46, nl)), { flags: cd.getUint16(o + 8, true), method: cd.getUint16(o + 10, true), csize: cd.getUint32(o + 20, true), at: cd.getUint32(o + 42, true) });
+    o += 46 + nl + cd.getUint16(o + 30, true) + cd.getUint16(o + 32, true);
+  }
+  return {
+    names: [...entries.keys()],
+    async text(name) {
+      const en = entries.get(name);
+      if (!en) return null;
+      if (en.flags & 1) throw new Error('locked');
+      const lh = new DataView(await file.slice(en.at, en.at + 30).arrayBuffer()), start = en.at + 30 + lh.getUint16(26, true) + lh.getUint16(28, true);
+      const raw = file.slice(start, start + en.csize);
+      if (en.method === 0) return raw.text();
+      if (en.method !== 8) throw new Error('zip');
+      return new Response(raw.stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+    },
+  };
+}
+
+/* ───────────── hwpx 읽기 ───────────── */
+const kids = (e, name) => [...e.children].filter(c => c.localName === name);
+const kid = (e, name) => { for (const c of e.children) if (c.localName === name) return c; return null; };
+const all = (e, name) => e.getElementsByTagNameNS('*', name);
+function parseXml(text) {
+  const d = new DOMParser().parseFromString(text, 'application/xml');
+  if (d.getElementsByTagName('parsererror').length) throw new Error('xml');
+  return d;
+}
+/* 문서 머리 정보: 글자 모양(크기·굵기), 문단 모양(번호 종류와 수준), 번호 모양, 글머리표 */
+function parseHeader(doc) {
+  const H = { char: new Map(), para: new Map(), nums: new Map(), bullets: new Map() };
+  for (const c of all(doc, 'charPr')) if (c.hasAttribute('id')) H.char.set(c.getAttribute('id'), { h: Number(c.getAttribute('height')) || 1000, bold: !!kid(c, 'bold') });
+  for (const p of all(doc, 'paraPr')) {
+    const hd = all(p, 'heading')[0];
+    H.para.set(p.getAttribute('id'), hd ? { type: hd.getAttribute('type') || 'NONE', idRef: hd.getAttribute('idRef') || '0', level: Number(hd.getAttribute('level')) || 0 } : { type: 'NONE' });
+  }
+  for (const n of all(doc, 'numbering')) {
+    if (!n.hasAttribute('id')) continue;       // 구역 설정 안의 <hp:numbering>은 다른 것이다
+    const heads = new Map();
+    for (const h of kids(n, 'paraHead')) heads.set(Number(h.getAttribute('level')), { start: Number(h.getAttribute('start')) || 1, fmt: h.getAttribute('numFormat') || 'DIGIT', text: h.textContent || '' });
+    H.nums.set(n.getAttribute('id'), heads);
+  }
+  for (const b of all(doc, 'bullet')) H.bullets.set(b.getAttribute('id'), b.getAttribute('char') || '');
+  return H;
+}
+
+/* 번호 글자 만들기 */
+const HANGUL = '가나다라마바사아자차카타파하', JAMO = 'ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ', IDEO = '一二三四五六七八九十', HNUM = '일이삼사오육칠팔구십';
+const cyc = (s, n) => s[(n - 1) % s.length] + (n > s.length ? String(Math.ceil(n / s.length)) : '');
+function roman(n) {
+  if (n <= 0 || n >= 4000) return String(n);
+  const t = [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']];
+  let s = '';
+  for (const [v, r] of t) while (n >= v) { s += r; n -= v; }
+  return s;
+}
+function latin(n) { let s = ''; while (n > 0) { n--; s = String.fromCharCode(65 + n % 26) + s; n = Math.floor(n / 26); } return s; }
+function numText(n, fmt) {
+  const ring = (base, max) => (n >= 1 && n <= max ? String.fromCodePoint(base + n - 1) : `(${n})`);
+  switch (fmt) {
+    case 'CIRCLED_DIGIT': return n >= 1 && n <= 20 ? String.fromCodePoint(0x2460 + n - 1) : n <= 35 ? String.fromCodePoint(0x3251 + n - 21) : n <= 50 ? String.fromCodePoint(0x32B1 + n - 36) : `(${n})`;
+    case 'ROMAN_CAPITAL': return roman(n);
+    case 'ROMAN_SMALL': return roman(n).toLowerCase();
+    case 'LATIN_CAPITAL': return latin(n);
+    case 'LATIN_SMALL': return latin(n).toLowerCase();
+    case 'CIRCLED_LATIN_CAPITAL': return ring(0x24B6, 26);
+    case 'CIRCLED_LATIN_SMALL': return ring(0x24D0, 26);
+    case 'HANGUL_SYLLABLE': return cyc(HANGUL, n);
+    case 'CIRCLED_HANGUL_SYLLABLE': return ring(0x326E, 14);
+    case 'HANGUL_JAMO': return cyc(JAMO, n);
+    case 'CIRCLED_HANGUL_JAMO': return ring(0x3260, 14);
+    case 'HANGUL_PHONETIC': return n <= 10 ? HNUM[n - 1] : String(n);
+    case 'IDEOGRAPH': return n <= 10 ? IDEO[n - 1] : String(n);
+    case 'CIRCLED_IDEOGRAPH': return ring(0x3280, 10);
+    default: return String(n);
+  }
+}
+/* 문단 번호: 수준별로 세어 가다가, 얕은 수준이 나오면 그보다 깊은 수준은 처음부터 다시 센다 */
+function headOf(pr, ctx) {
+  if (!pr || pr.type === 'NONE') return null;
+  if (pr.type === 'BULLET') return { kind: 'bullet', text: '-' };
+  const outline = pr.type === 'OUTLINE', st = outline ? ctx.outline : ctx.number, id = outline ? ctx.outlineId : pr.idRef;
+  const heads = ctx.H.nums.get(id), hd = heads?.get(pr.level + 1);
+  if (!hd) return null;
+  if (st.id !== id) { st.id = id; st.v = Array(10).fill(0); }
+  const startOf = l => heads.get(l + 1)?.start ?? 1;
+  for (let l = 0; l < 10; l++) {
+    if (l < pr.level) { if (!st.v[l]) st.v[l] = startOf(l); }
+    else if (l === pr.level) st.v[l] = st.v[l] ? st.v[l] + 1 : startOf(l);
+    else st.v[l] = 0;
+  }
+  const text = hd.text.replace(/\^(\d+)/g, (_, d) => { const l = Number(d) - 1; return l >= 0 && l < 10 ? numText(st.v[l] || startOf(l), heads.get(l + 1)?.fmt || 'DIGIT') : ''; });
+  return { kind: outline ? 'outline' : 'number', text: fixPua(text).trim(), level: pr.level };
+}
+
+/* 한글 전용 글꼴의 기호(사용자 영역 글자)는 다른 프로그램에서 깨져 보이므로 비슷한 기호로 바꾼다 */
+const PUA = { 0xF06C: '●', 0xF06E: '■', 0xF0A7: '▪', 0xF0B7: '•', 0xF09F: '•', 0xF0D8: '➢', 0xF0FC: '✔', 0xF0E0: '→', 0xF075: '◆', 0xF076: '❖', 0xF0A8: '□', 0xF06F: '□', 0xF0FE: '☑', 0xF0A1: '○', 0xF077: '◆' };
+const fixPua = s => s.replace(/[\uE000-\uF8FF]/g, ch => PUA[ch.charCodeAt(0)] || '•');
+const tidy = s => fixPua(s).replace(/(?:\[그림\]\s*){2,}/g, '[그림] ').replace(/[\t\u00A0\u2002\u2003\u3000]/g, ' ').replace(/ {2,}/g, ' ').split('\n').map(l => l.trim()).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+
+function textOf(t) {
+  let s = '';
+  for (const n of t.childNodes) {
+    if (n.nodeType === 3) s += n.nodeValue;
+    else if (n.nodeType === 1) {
+      const k = n.localName;
+      if (k === 'lineBreak') s += '\n'; else if (k === 'tab' || k === 'fwSpace' || k === 'nbSpace') s += ' '; else if (k === 'hyphen') s += '-';
+    }
+  }
+  return s;
+}
+const SHAPES = new Set(['rect', 'ellipse', 'polygon', 'arc', 'curve', 'line', 'connectLine', 'container', 'textart']);
+function walkParas(box, ctx, out) {
+  for (const c of box.children) {
+    if (c.localName === 'p') walkPara(c, ctx, out);
+    else if (c.localName === 'tbl') out.push(tableOf(c, ctx));      // 한글이 만든 문서에서는 표가 문단 안에 있지만, 다른 프로그램이 만든 문서는 밖에 두기도 한다
+  }
+}
+function captionOf(obj, ctx) {
+  const cap = kid(obj, 'caption'), sl = cap && kid(cap, 'subList');
+  if (!sl) return '';
+  const tmp = []; walkParas(sl, ctx, tmp);
+  return tmp.filter(b => b.type === 'p').map(b => b.text).join(' ').trim();
+}
+function walkPara(p, ctx, out) {
+  const head = headOf(ctx.H.para.get(p.getAttribute('paraPrIDRef')), ctx);
+  let buf = '', first = true, link = null;
+  const sizes = new Map(); let chars = 0, bold = 0;
+  const flush = () => {
+    const text = tidy(buf); buf = '';
+    if (!text && !(first && head && head.kind !== 'bullet')) { return; }
+    let h = 0, best = -1;
+    for (const [k, v] of sizes) if (v > best) { best = v; h = k; }
+    out.push({ type: 'p', text, head: first ? head : null, h, bold: chars > 0 && bold === chars, depth: ctx.depth });
+    first = false; sizes.clear(); chars = 0; bold = 0;
+  };
+  const shape = n => {       // 글상자가 든 도형, 묶음 개체
+    if (n.localName === 'container') { for (const c of n.children) if (SHAPES.has(c.localName) || c.localName === 'pic') c.localName === 'pic' ? pic(c) : shape(c); return; }
+    const sl = kid(n, 'drawText') && kid(kid(n, 'drawText'), 'subList'), cap = captionOf(n, ctx), inner = [];
+    if (sl) { ctx.depth++; walkParas(sl, ctx, inner); ctx.depth--; }
+    if (inner.length) { flush(); out.push({ type: 'box', blocks: inner }); }
+    if (cap) buf += (buf && !/\s$/.test(buf) ? ' ' : '') + cap;
+  };
+  const pic = n => { if (ctx.opt.pic) { const c = captionOf(n, ctx); buf += c ? `[그림: ${c}]` : '[그림]'; } };
+  const ctrl = c => {
+    switch (c.localName) {
+      case 'footNote': case 'endNote': {
+        const sl = kid(c, 'subList'), tmp = [];
+        if (sl) { ctx.inNote++; walkParas(sl, ctx, tmp); ctx.inNote--; }
+        ctx.notes.push(tmp.filter(b => b.type === 'p').map(b => b.text).join(' ').trim());
+        buf += `[^${ctx.notes.length}]`;
+        break;
+      }
+      case 'header': case 'footer': {
+        if (!ctx.opt.hf) break;
+        const sl = kid(c, 'subList'), tmp = [];
+        if (sl) walkParas(sl, ctx, tmp);
+        const t = tmp.filter(b => b.type === 'p').map(b => b.text).join(' ').trim();
+        if (t) ctx.hf.push(`${c.localName === 'header' ? '머리말' : '꼬리말'}: ${t}`);
+        break;
+      }
+      case 'autoNum': { const ty = c.getAttribute('numType') || ''; if (!/PAGE|NOTE/.test(ty)) buf += c.getAttribute('num') || ''; break; }
+      case 'fieldBegin': {
+        if (c.getAttribute('type') === 'MEMO') {       // 메모(쪽지): 본문이 아니므로 고른 경우에만 넣는다
+          const sl = kid(c, 'subList'), tmp = [];
+          if (sl && ctx.opt.memo) { walkParas(sl, ctx, tmp); const t = tmp.filter(b => b.type === 'p').map(b => b.text).join(' ').trim(); if (t) buf += `[메모: ${t}]`; }
+          break;
+        }
+        if (c.getAttribute('type') !== 'HYPERLINK') break;
+        const cmd = [...all(c, 'stringParam')].find(x => x.getAttribute('name') === 'Command')?.textContent || '';
+        const url = cmd.replace(/\\(.)/g, '\u0001$1').split(';')[0].replace(/\u0001/g, '');     // "주소;옵션…" 꼴. 주소 안의 ; : 는 \로 적혀 있다
+        if (/^https?:\/\//i.test(url)) link = { at: buf.length, url };
+        break;
+      }
+      case 'fieldEnd': if (link) { const t = buf.slice(link.at).trim(); if (t && t !== link.url) buf = buf.slice(0, link.at) + `[${t}](${link.url})`; link = null; } break;
+    }
+  };
+  const run = (r, cp) => {
+    for (const n of r.children) {
+      const k = n.localName;
+      if (k === 't') {
+        const s = textOf(n), len = s.replace(/\s/g, '').length;
+        buf += s;
+        if (len && cp) { sizes.set(cp.h, (sizes.get(cp.h) || 0) + len); chars += len; if (cp.bold) bold += len; }
+      } else if (k === 'tbl') { flush(); out.push(tableOf(n, ctx)); }
+      else if (k === 'pic') pic(n);
+      else if (k === 'equation') { const s = kid(n, 'script')?.textContent.trim(); if (s) buf += `[수식: ${s}]`; }
+      else if (k === 'ctrl') { for (const c of n.children) ctrl(c); }
+      else if (k === 'compose') buf += n.getAttribute('composeText') || '';
+      else if (k === 'dutmal') { const m = kid(n, 'mainText')?.textContent || '', s = kid(n, 'subText')?.textContent || ''; buf += s ? `${m}(${s})` : m; }
+      else if (k === 'secPr') { const o = n.getAttribute('outlineShapeIDRef'); if (o) ctx.outlineId = o; }
+      else if (SHAPES.has(k)) shape(n);
+      else if (k === 'checkBtn' || k === 'radioBtn') buf += `${n.getAttribute('value') === 'CHECKED' ? '☑' : '☐'} ${n.getAttribute('caption') || ''} `;
+      else if (k === 'ole' || k === 'chart' || k === 'video') { if (ctx.opt.pic) buf += '[개체]'; }
+      else if (k === 'switch') { const d = kid(n, 'default') || kid(n, 'case'); if (d) run(d, cp); }      // 새 기능용 표현과 예전 표현이 같이 들어 있으면 하나만 읽는다
+    }
+  };
+  for (const r of kids(p, 'run')) run(r, ctx.H.char.get(r.getAttribute('charPrIDRef')));
+  flush();
+}
+function tableOf(tbl, ctx) {
+  const cells = []; let nr = 0, nc = 0;
+  ctx.depth++;
+  for (const [ri, tr] of kids(tbl, 'tr').entries()) for (const [ci, tc] of kids(tr, 'tc').entries()) {
+    const a = kid(tc, 'cellAddr'), s = kid(tc, 'cellSpan'), sl = kid(tc, 'subList');
+    const r = a ? Number(a.getAttribute('rowAddr')) || 0 : ri, c = a ? Number(a.getAttribute('colAddr')) || 0 : ci;      // 칸 위치가 적혀 있지 않으면 나온 순서대로
+    const rs = Math.max(1, Number(s?.getAttribute('rowSpan')) || 1), cs = Math.max(1, Number(s?.getAttribute('colSpan')) || 1);
+    const blocks = [];
+    walkParas(sl || tc, ctx, blocks);
+    cells.push({ r, c, rs, cs, blocks });
+    nr = Math.max(nr, r + rs); nc = Math.max(nc, c + cs);
+  }
+  ctx.depth--;
+  return simplifyTable({ type: 'table', nr, nc, cells, caption: captionOf(tbl, ctx) });
+}
+/* 서식용 표에는 간격을 벌리려고 둔 빈 줄·빈 칸과, 쓰이지 않는 칸 나눔이 많다. 내용은 그대로 두고 그런 것만 걷어 낸다. */
+function simplifyTable(t) {
+  const empty = c => !c.blocks.some(b => b.type !== 'p' || b.text || b.head);
+  for (const [pos, span, size] of [['c', 'cs', 'nc'], ['r', 'rs', 'nr']]) {
+    // 1) 통째로 비어 있고 합친 칸이 걸쳐 있지 않은 줄·칸을 지운다
+    for (let j = t[size] - 1; j >= 0 && t[size] > 1; j--) {
+      const on = t.cells.filter(c => c[pos] <= j && j < c[pos] + c[span]);
+      if (!on.length || !on.every(c => c[span] === 1 && empty(c))) continue;
+      t.cells = t.cells.filter(c => !on.includes(c));
+      for (const c of t.cells) if (c[pos] > j) c[pos]--;
+      t[size]--;
+    }
+    // 2) 어떤 칸도 시작하지 않는 경계를 없앤다(합친 칸 수가 줄어든다)
+    const starts = [...new Set(t.cells.map(c => c[pos]))].sort((a, b) => a - b);
+    for (const c of t.cells) { const a = starts.indexOf(c[pos]), b = starts.filter(s => s < c[pos] + c[span]).length; c[pos] = a; c[span] = Math.max(1, b - a); }
+    t[size] = t.cells.reduce((m, c) => Math.max(m, c[pos] + c[span]), 0);
+  }
+  t.cells.sort((x, y) => x.r - y.r || x.c - y.c);
+  return t;
+}
+async function readHwpx(file, opt) {
+  const zip = await openZip(file);
+  const secs = zip.names.map(n => /^Contents\/section(\d+)\.xml$/i.exec(n)).filter(Boolean).sort((a, b) => a[1] - b[1]).map(m => m[0]);
+  if (!secs.length) throw new Error('nosec');
+  let H;
+  try { H = parseHeader(parseXml(await zip.text(zip.names.find(n => /^Contents\/header\.xml$/i.test(n)) || '') || '<x/>')); }
+  catch (e) { if (e.message === 'xml' && /encryption/i.test(await zip.text('META-INF/manifest.xml').catch(() => '') || '')) throw new Error('locked'); throw e; }
+  const ctx = { H, opt, notes: [], hf: [], outline: { id: null, v: [] }, number: { id: null, v: [] }, outlineId: '1', depth: 0, inNote: 0 };
+  const blocks = [];
+  for (const name of secs) {
+    let doc;
+    try { doc = parseXml(await zip.text(name)); }
+    catch (e) { if (e.message === 'xml' && /encryption/i.test(await zip.text('META-INF/manifest.xml').catch(() => '') || '')) throw new Error('locked'); throw e; }
+    walkParas(doc.documentElement, ctx, blocks);
+  }
+  markHeadings(blocks, opt);
+  return { blocks, notes: ctx.notes, hf: ctx.hf };
+}
+/* 본문에서 가장 많이 쓰인 글자 크기를 기준으로, 그보다 뚜렷이 큰 짧은 줄을 제목으로 본다 */
+function markHeadings(blocks, opt) {
+  const weight = new Map();
+  const scan = list => { for (const b of list) { if (b.type === 'p' && b.h) weight.set(b.h, (weight.get(b.h) || 0) + b.text.length); else if (b.type === 'box') scan(b.blocks); else if (b.type === 'table') for (const c of b.cells) scan(c.blocks); } };
+  scan(blocks);
+  let body = 1000, best = -1;
+  for (const [h, w] of weight) if (w > best) { best = w; body = h; }
+  for (const b of blocks) {
+    if (b.type !== 'p' || !opt.head || b.head || !b.text || b.text.length > CFG.HEAD_MAX || b.text.includes('\n') || /^\[그림[^\]]*\]$/.test(b.text)) continue;
+    const k = b.h / body;
+    b.lvl = k >= CFG.H1 ? 1 : k >= CFG.H2 ? 2 : k >= CFG.H3 && b.bold ? 3 : 0;
+  }
+}
+
+/* ───────────── 개인정보: 이름과 이름표 ─────────────
+   PDF 업무 도구와 같은 이름표를 쓴다. 종류별로 [학생A], [교사A], [학교A] … */
+const KINDS = { student: { word: '학생', box: 'namesStudent' }, teacher: { word: '교사', box: 'namesTeacher' }, school: { word: '학교', box: 'namesSchool' } };
+const COMPOUND_SURNAMES = ['남궁', '황보', '제갈', '사공', '선우', '서문', '독고', '동방'];
+const GENERIC_SCHOOLS = new Set(['일반', '일반계', '특성화', '특수목적', '자율', '자율형사립', '자율형공립', '인문계', '전문계', '실업계', '전국', '다른', '해당', '우리', '상급', '출신', '관내', '인근', '소속', '재학', '동일', '과학', '외국어', '예술', '체육', '국제', '마이스터', '방송통신', '부설', '공립', '사립', '여자', '남자', '각급', '모든', '본교는', '도내', '시내']);
+const P = { labels: new Map(), seq: {}, auto: [] };       // 한 번 붙인 이름표는 창을 닫을 때까지 바뀌지 않는다
+const alpha = i => { let s = ''; i++; while (i > 0) { i--; s = String.fromCharCode(65 + (i % 26)) + s; i = Math.floor(i / 26); } return s; };
+function labelOf(name, kind) {
+  const k = kind + '|' + name;
+  if (!P.labels.has(k)) { P.seq[kind] = P.seq[kind] || 0; P.labels.set(k, `[${KINDS[kind].word}${alpha(P.seq[kind]++)}]`); }
+  return P.labels.get(k);
+}
+function parseNames(kind) {
+  const out = [];
+  for (const t of $(KINDS[kind].box).value.normalize('NFC').split(/[\n,，、;]+/)) {
+    const n = t.trim().replace(/\s+/g, ' ');
+    if (n.length >= 2 && !out.includes(n)) out.push(n);
+  }
+  return out;
+}
+function givenName(name) {
+  if (name.length >= 4 && COMPOUND_SURNAMES.includes(name.slice(0, 2))) return name.slice(2);
+  return name.length >= 3 ? name.slice(1) : null;
+}
+function schoolShort(name) {
+  const m = name.match(/^(.{2,}?)(여자)?(초등학교|중학교|고등학교)$/);
+  return m ? m[1] + (m[2] ? '여' : '') + { 초등학교: '초', 중학교: '중', 고등학교: '고' }[m[3]] : null;
+}
+function entities() {
+  const out = [];
+  for (const kind of Object.keys(KINDS)) {
+    const typed = parseNames(kind);
+    for (const n of typed) out.push({ kind, name: n, auto: false });
+    if (kind === 'school' && $('optAutoSchool').checked) for (const n of P.auto) if (!typed.includes(n)) out.push({ kind, name: n, auto: true });
+  }
+  return out;
+}
+function buildMatchers() {
+  const ms = [], loose = $('optLoose').checked;
+  const names = [];
+  for (const e of entities()) {
+    const label = labelOf(e.name, e.kind);
+    names.push({ ...e, label });
+    const short = e.kind === 'school' && schoolShort(e.name);
+    if (short) names.push({ ...e, name: short, key: e.name, label });
+  }
+  names.sort((a, b) => b.name.length - a.name.length);
+  for (const n of names) {
+    // 글자 사이: 기본은 줄바꿈만 허용, '띄어 쓴 이름'을 켜면 빈칸도 허용(학교 이름은 제외)
+    const lo = loose && n.kind !== 'school', sep = lo ? '\\s*' : '\\n?';
+    const src = n.name.trim().split(/\s+/).map(w => [...w].map(esc).join(sep)).join(lo ? '\\s*' : '\\s+');
+    ms.push({ pri: 0, key: n.kind + '|' + (n.key || n.name), label: n.label, re: new RegExp(src, 'g') });
+  }
+  if ($('optRrn').checked) ms.push({ pri: 1, key: '[주민번호]', label: '[주민번호]', re: /(?<!\d)\d{6}[ ]?(?:[-–]\n?)?[ ]?[1-4]\d{6}(?!\d)/g });
+  if ($('optPhone').checked) ms.push({ pri: 2, key: '[전화번호]', label: '[전화번호]', re: /(?<!\d)01[016789](?:[-. ]|-\n)?\d{3,4}(?:[-. ]|-\n)?\d{4}(?!\d)/g });
+  if ($('optEmail').checked) ms.push({ pri: 3, key: '[이메일]', label: '[이메일]', re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g });
+  if ($('optSid').checked) {
+    const fmt = $('sidFmt').value.trim(), m = fmt.match(/^\/(.+)\/$/);
+    const src = m ? m[1] : fmt ? '(?<!\\d)' + [...fmt].map(ch => (ch === '#' ? '\\d' : esc(ch))).join('') + '(?!\\d)' : '';
+    if (src) { try { ms.push({ pri: 4, key: '[학번]', label: '[학번]', re: new RegExp(src, 'g') }); } catch { /* 형식을 읽을 수 없으면 건너뛴다 */ } }
+  }
+  if ($('optAddr').checked) {
+    const DETAIL = '(?:[,\\s]*\\d+동)?(?:[,\\s]*\\d+호)?(?:[,\\s]*\\d+층)?(?:\\s*\\([^)\\n]{1,30}\\))?';
+    const SIDO = '(?:서울|부산|대구|인천|광주|대전|울산|경기|강원|충청북|충청남|충북|충남|전라북|전라남|전북|전남|경상북|경상남|경북|경남|제주)(?:특별자치도|특별시|광역시|도|시)?(?:\\s*[가-힣]{1,5}(?:시|군|구)){1,2}|세종(?:특별자치시|시)?';
+    const ROAD = '\\s*[가-힣0-9·]{1,12}(?:로|길)\\s?\\d+(?:-\\d+)?(?:번길\\s?\\d+(?:-\\d+)?)?';
+    const JIBUN = '\\s*[가-힣0-9]{1,8}(?:동|읍|면|리|가)(?:\\s*[가-힣0-9]{1,8}(?:동|리))?\\s?\\d+(?:-\\d+)?(?:번지)?';
+    ms.push({ pri: 3.5, key: '[주소]', label: '[주소]', re: new RegExp('(?<=주\\s?소\\s?[:：][ \\t]?)(?![ \\t])[^\\n]+', 'g') });
+    ms.push({ pri: 3.6, key: '[주소]', label: '[주소]', re: new RegExp('(?:' + SIDO + ')(?:' + ROAD + '|' + JIBUN + ')' + DETAIL, 'g') });
+  }
+  if ($('optGiven').checked) for (const n of names) {
+    if (n.kind !== 'student') continue;      // 성을 뺀 이름은 학생만
+    const g = givenName(n.name.replace(/\s+/g, ''));
+    if (g && g.length >= 2) ms.push({ pri: 5, key: n.kind + '|' + n.name, label: n.label, re: new RegExp(esc(g), 'g') });
+  }
+  return ms;
+}
+/* 글 한 덩어리에서 찾은 것들을 겹치지 않게 골라 이름표로 바꾼다 */
+function maskText(s, ms, counts) {
+  if (!s || !ms.length) return s;
+  const hits = [];
+  for (const m of ms) { m.re.lastIndex = 0; for (const x of s.matchAll(m.re)) if (x[0]) hits.push({ a: x.index, b: x.index + x[0].length, m }); }
+  if (!hits.length) return s;
+  hits.sort((p, q) => p.m.pri - q.m.pri || (q.b - q.a) - (p.b - p.a) || p.a - q.a);
+  const take = [];
+  for (const h of hits) if (!take.some(t => h.a < t.b && t.a < h.b)) take.push(h);
+  take.sort((p, q) => p.a - q.a);
+  let out = '', last = 0;
+  for (const h of take) { out += s.slice(last, h.a) + h.m.label; last = h.b; counts.set(h.m.key, (counts.get(h.m.key) || 0) + 1); }
+  return out + s.slice(last);
+}
+const mapBlocks = (blocks, f) => blocks.map(b => b.type === 'p' ? { ...b, text: f(b.text) } : b.type === 'box' ? { ...b, blocks: mapBlocks(b.blocks, f) } : { ...b, caption: f(b.caption), cells: b.cells.map(c => ({ ...c, blocks: mapBlocks(c.blocks, f) })) });
+function plainText(d) {
+  const out = [];
+  const scan = list => { for (const b of list) { if (b.type === 'p') out.push(b.text); else if (b.type === 'box') scan(b.blocks); else { out.push(b.caption); for (const c of b.cells) scan(c.blocks); } } };
+  scan(d.blocks); out.push(...d.notes, ...d.hf);
+  return out.join('\n');
+}
+function discoverSchools() {
+  const found = [];
+  for (const f of state.files) if (f.doc) for (const m of plainText(f.doc).matchAll(/([가-힣]{2,12}?)((?:여자|남자)?(?:초등학교|중학교|고등학교))/g)) {
+    if (GENERIC_SCHOOLS.has(m[1])) continue;
+    const name = m[1] + m[2];
+    if (!found.includes(name)) found.push(name);
+  }
+  P.auto = found;
+}
+
+/* ───────────── Markdown으로 ───────────── */
+const mdCell = s => s.replace(/\|/g, '\\|').replace(/\n/g, '<br>');
+const htmlEsc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const pLine = b => (b.head ? b.head.text + (b.text ? ' ' : '') : '') + b.text;
+function inlineOf(blocks) {       // 표 칸 안의 내용을 한 줄로
+  const parts = [];
+  for (const b of blocks) {
+    if (b.type === 'p') parts.push(pLine(b));
+    else if (b.type === 'box') parts.push(inlineOf(b.blocks));
+    else { if (b.caption) parts.push(b.caption); parts.push(gridOf(b).map(row => row.filter(Boolean).map(c => inlineOf(c.blocks)).join(' / ')).join('\n')); }
+  }
+  return parts.filter(Boolean).join('\n');
+}
+function gridOf(t) {
+  const g = Array.from({ length: t.nr }, () => Array(t.nc).fill(null));
+  for (const c of t.cells) if (c.r < t.nr && c.c < t.nc) g[c.r][c.c] = c;
+  return g;
+}
+const hasSpan = t => t.cells.some(c => c.rs > 1 || c.cs > 1 || c.blocks.some(b => b.type === 'table'));
+function tableHtml(t) {
+  const rows = gridOf(t).map(row => '<tr>' + row.filter(Boolean).map(c => {
+    const inner = c.blocks.map(b => b.type === 'table' ? tableHtml(b) : htmlEsc(b.type === 'p' ? pLine(b) : inlineOf(b.blocks)).replace(/\n/g, '<br>')).filter(Boolean).join('<br>');
+    return `<td${c.rs > 1 ? ` rowspan="${c.rs}"` : ''}${c.cs > 1 ? ` colspan="${c.cs}"` : ''}>${inner}</td>`;
+  }).join('') + '</tr>');
+  return '<table>\n' + rows.join('\n') + '\n</table>';
+}
+function tableMd(t, opt) {
+  const out = [];
+  if (t.caption) out.push(t.caption);
+  if (t.cells.length === 1) { out.push(quote(blocksMd(t.cells[0].blocks, opt))); return out.filter(Boolean).join('\n\n'); }      // 한 칸짜리 표는 글상자처럼 쓴 것
+  if (opt.table === 'html' || (opt.table === 'auto' && hasSpan(t))) { out.push(tableHtml(t)); return out.join('\n\n'); }
+  const g = gridOf(t), lines = [];
+  g.forEach((row, i) => {
+    lines.push('| ' + row.map(c => (c ? mdCell(inlineOf(c.blocks)) : '')).join(' | ') + ' |');
+    if (i === 0) lines.push('|' + ' --- |'.repeat(t.nc));
+  });
+  out.push(lines.join('\n'));
+  return out.join('\n\n');
+}
+const quote = s => s.split('\n').map(l => (l ? '> ' + l : '>')).join('\n');
+function blocksMd(blocks, opt) {
+  let out = '', prevList = false;
+  for (const b of blocks) {
+    let s, isList = false;
+    if (b.type === 'p') {
+      if (b.lvl) s = '#'.repeat(b.lvl) + ' ' + b.text;
+      else { s = pLine(b); isList = !!b.head; }
+    } else if (b.type === 'box') s = quote(blocksMd(b.blocks, opt));
+    else s = tableMd(b, opt);
+    if (!s) continue;
+    out += (out ? (isList && prevList ? '\n' : '\n\n') : '') + s;      // 번호·글머리표 문단끼리는 붙여 쓴다
+    prevList = isList;
+  }
+  return out;
+}
+function docMd(d, opt) {
+  let s = blocksMd(d.blocks, opt);
+  if (d.hf.length) s = d.hf.join('\n') + '\n\n' + s;
+  if (d.notes.length) s += '\n\n' + d.notes.map((n, i) => `[^${i + 1}]: ${n}`).join('\n');
+  return s.trim() + '\n';
+}
+
+/* ───────────── 미리보기 ───────────── */
+const LABEL_RE = /\[(?:학생|교사|학교)[A-Z]+\]|\[(?:주민번호|전화번호|이메일|학번|주소)\]/g;
+function markInto(node, text) {       // 이름표를 노란 표시로
+  let last = 0;
+  for (const m of text.matchAll(LABEL_RE)) {
+    if (m.index > last) node.append(text.slice(last, m.index));
+    node.append(el('mark', { text: m[0] }));
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) node.append(text.slice(last));
+  return node;
+}
+function renderBlocks(blocks, into) {
+  for (const b of blocks) {
+    if (b.type === 'p') {
+      if (b.lvl) { into.append(markInto(el('h' + b.lvl), b.text)); continue; }
+      const p = el('p', { class: b.head ? 'li' : '' });
+      if (b.head) p.append(el('span', { class: 'hd', text: b.head.kind === 'bullet' ? '•' : b.head.text }));
+      into.append(markInto(p, b.text));
+    } else if (b.type === 'box') { const q = el('blockquote'); renderBlocks(b.blocks, q); into.append(q); }
+    else {
+      if (b.caption) into.append(markInto(el('div', { class: 'cap' }), b.caption));
+      if (b.cells.length === 1) { const q = el('blockquote'); renderBlocks(b.cells[0].blocks, q); into.append(q); continue; }
+      const tb = el('table');
+      for (const row of gridOf(b)) {
+        const tr = el('tr');
+        for (const c of row) { if (!c) continue; const td = el('td', { rowSpan: c.rs, colSpan: c.cs }); renderBlocks(c.blocks, td); tr.append(td); }
+        tb.append(tr);
+      }
+      into.append(tb);
+    }
+  }
+}
+
+/* ───────────── 상태와 화면 ───────────── */
+const state = { files: [], cur: null, view: 'preview', tab: 'conv' };
+let seq = 0;
+const curFile = () => state.files.find(f => f.id === state.cur) || null;
+const opts = () => ({ table: $('optTable').value, head: $('optHead').checked, pic: $('optPic').checked, hf: $('optHF').checked, memo: $('optMemo').checked });
+const ERR = { zip: 'hwpx 파일이 아니거나 손상된 파일입니다.', nosec: '본문이 들어 있지 않은 파일입니다.', locked: '암호가 걸린 문서는 열 수 없습니다. 한글에서 암호를 풀고 다시 저장해 주세요.', xml: '문서 내용을 읽을 수 없습니다.', hwp: '옛 형식(.hwp)입니다. 한글에서 "다른 이름으로 저장하기 → 한글 표준 문서(*.hwpx)"로 저장한 뒤 넣어 주세요.' };
+
+async function parseFile(f) {
+  try {
+    const head = new Uint8Array(await f.file.slice(0, 8).arrayBuffer());
+    if (head[0] === 0xD0 && head[1] === 0xCF) throw new Error('hwp');
+    if (f.file.size > CFG.MAX_FILE) throw new Error('zip');
+    f.doc = await readHwpx(f.file, opts()); f.err = '';
+  } catch (e) { f.doc = null; f.err = ERR[e.message] || ERR.xml; console.info(f.name, e); }
+}
+async function addFiles(files) {
+  files = [...files];
+  if (!files.length) return;
+  const added = [];
+  for (const file of files.sort((a, b) => a.name.localeCompare(b.name, 'ko', { numeric: true }))) {
+    const f = { id: ++seq, file, name: file.name, doc: null, err: '', out: null };
+    state.files.push(f); added.push(f);
+    await parseFile(f);
+  }
+  const ok = added.find(f => f.doc);
+  if (ok) state.cur = ok.id; else if (!curFile()) state.cur = added[0].id;
+  for (const f of added) if (f.err) toast(`${f.name}: ${f.err}`, 8000);
+  refresh();
+}
+async function reparse() { for (const f of state.files) if (!f.err || f.doc) await parseFile(f); refresh(); }
+/* 가명 처리와 Markdown 변환을 다시 한다. 설정이나 이름을 바꿀 때마다 부른다. */
+let counts = new Map();
+function refresh() {
+  discoverSchools();
+  const ms = buildMatchers(), o = opts();
+  counts = new Map();
+  for (const f of state.files) {
+    if (!f.doc) { f.out = null; continue; }
+    const mk = s => maskText(s, ms, counts);
+    const d = { blocks: mapBlocks(f.doc.blocks, mk), notes: f.doc.notes.map(mk), hf: f.doc.hf.map(mk) };
+    f.out = { d, md: docMd(d, o) };
+  }
+  render();
+}
+function render() {
+  const f = curFile(), has = !!(f && f.out);
+  $('empty').hidden = state.files.length > 0;
+  $('bar').hidden = !state.files.length;
+  $('preview').hidden = !has || state.view !== 'preview'; $('mdText').hidden = !has || state.view !== 'md';
+  for (const b of $('viewSeg').children) b.setAttribute('aria-selected', b.dataset.v === state.view);
+  $('docName').textContent = f ? f.name : ''; $('docName').title = f ? f.name : '';
+  if (has) {
+    const tables = (f.out.md.match(/^(\| --- |<table>)/gm) || []).length;
+    $('docStat').textContent = `${f.out.md.length.toLocaleString()}자` + (tables ? ` · 표 ${tables}개` : '');
+    if (state.view === 'preview') {
+      const pv = $('preview'); pv.textContent = '';
+      for (const t of f.out.d.hf) pv.append(markInto(el('div', { class: 'cap' }), t));
+      renderBlocks(f.out.d.blocks, pv);
+      if (f.out.d.notes.length) { const n = el('div', { class: 'notes' }); f.out.d.notes.forEach((t, i) => n.append(markInto(el('div'), `[^${i + 1}] ${t}`))); pv.append(n); }
+      if (!pv.childNodes.length) pv.append(el('p', { class: 'hint', text: '글이 들어 있지 않은 문서입니다.' }));
+    } else $('mdText').textContent = f.out.md;
+  } else $('docStat').textContent = f && f.err ? f.err : '';
+  // 문서 목록
+  const fl = $('fileList'); fl.textContent = '';
+  $('fileHint').hidden = state.files.length > 0;
+  for (const x of state.files) {
+    const del = el('button', { type: 'button', text: '✕', title: '목록에서 빼기' });
+    del.onclick = e => { e.stopPropagation(); state.files = state.files.filter(y => y !== x); if (state.cur === x.id) state.cur = state.files.find(y => y.doc)?.id ?? state.files[0]?.id ?? null; refresh(); };
+    const li = el('li', { class: (x.id === state.cur ? 'sel' : '') + (x.err ? ' err' : ''), title: x.err || x.name }, el('span', { class: 'nm', text: x.name }), el('small', { text: x.err ? '열지 못함' : `${x.out.md.length.toLocaleString()}자` }), del);
+    li.onclick = () => { state.cur = x.id; $('scroller').scrollTop = 0; render(); };
+    fl.append(li);
+  }
+  const okN = state.files.filter(x => x.out).length;
+  $('btnCopy').disabled = $('btnSave').disabled = !has;
+  $('allActs').hidden = okN < 2;
+  $('outHint').textContent = has && counts.size ? '가명 처리된 내용으로 내보냅니다.' : has ? '이름을 가리려면 개인정보 탭에 이름을 적으세요.' : '';
+  renderPii(); renderRestore();
+}
+function renderPii() {
+  const tb = $('mapTbl'); tb.textContent = '';
+  const ents = entities(), total = [...counts.values()].reduce((a, b) => a + b, 0), any = state.files.some(f => f.out);
+  for (const e of ents) {
+    const n = counts.get(e.kind + '|' + e.name) || 0, tr = el('tr');
+    tr.append(el('td', { class: 'kd', text: KINDS[e.kind].word + (e.auto ? '·자동' : '') }), el('td', { text: e.name }), el('td', {}, '→ ', el('mark', { text: labelOf(e.name, e.kind) })), el('td', { text: any ? `${n}곳` : '' }));
+    tb.append(tr);
+  }
+  for (const k of ['[주민번호]', '[전화번호]', '[이메일]', '[학번]', '[주소]']) {
+    const n = counts.get(k); if (!n) continue;
+    const tr = el('tr'); tr.append(el('td', { class: 'kd', text: '자동' }), el('td', { text: k.slice(1, -1) }), el('td', {}, '→ ', el('mark', { text: k })), el('td', { text: `${n}곳` })); tb.append(tr);
+  }
+  $('piiStat').textContent = !any ? '문서를 넣고 이름을 적으면 여기에 대응표가 나옵니다.' : total ? `모두 ${total}곳을 이름표로 바꿨습니다.` : '바뀐 곳이 없습니다. 위에 이름을 적어 보세요.';
+  // 적어 준 이름인데 문서에서 한 번도 찾지 못한 것, 그리고 띄어 쓴 꼴로 남아 있는 것
+  const warn = [];
+  if (any) {
+    const missing = ents.filter(e => !e.auto && !(counts.get(e.kind + '|' + e.name) > 0)).map(e => e.name);
+    if (missing.length) warn.push(`문서에서 찾지 못한 이름: ${missing.join(', ')} — 철자나 띄어쓰기가 다른지 확인하세요.`);
+    const text = state.files.filter(f => f.out).map(f => f.out.md).join('\n');
+    if (!$('optLoose').checked) {
+      const left = ents.filter(e => e.kind !== 'school' && new RegExp([...e.name.replace(/\s+/g, '')].map(esc).join('\\s+')).test(text)).map(e => e.name);
+      if (left.length) warn.push(`띄어 쓴 꼴로 남아 있는 이름: ${left.join(', ')} — "띄어 쓴 이름도 찾기"를 켜세요.`);
+    }
+    if (!$('optGiven').checked) {
+      const left = ents.filter(e => e.kind === 'student').map(e => givenName(e.name.replace(/\s+/g, ''))).filter(g => g && g.length >= 2 && text.includes(g));
+      if (left.length) warn.push(`성을 뺀 이름이 남아 있습니다: ${[...new Set(left)].join(', ')} — 사람 이름으로 쓰인 것이면 "성을 뺀 이름도 바꾸기"를 켜세요.`);
+    }
+  }
+  $('piiWarn').hidden = !warn.length; $('piiWarn').textContent = warn.join(' ');
+}
+
+/* ───────────── 되돌리기 ───────────── */
+const nameMap = () => entities().map(e => ({ name: e.name, label: labelOf(e.name, e.kind) }));
+function labelPattern(label) {
+  const core = label.trim().replace(/^[\[\(（【<〔［\\]+/, '').replace(/[\]\)）】>〕］\\]+$/, '').trim();
+  if (!core) return null;
+  const body = [...core].filter(ch => !/\s/.test(ch)).map(esc).join('\\s*');
+  const head = /^[A-Za-z0-9]/.test(core) ? '(?<![A-Za-z0-9])' : '', tail = /[A-Za-z0-9]$/.test(core) ? '(?![A-Za-z0-9])' : '';
+  return { core, src: `(?:\\\\?[\\[［【〔]\\s*${body}\\s*\\\\?[\\]］】〕]|${head}${body}${tail})` };
+}
+const JOSA = [['은', '는'], ['이', '가'], ['을', '를'], ['과', '와'], ['으로', '로'], ['아', '야']];
+function fixJosa(name, j) {
+  const c = name.charCodeAt(name.length - 1);
+  if (c < 0xac00 || c > 0xd7a3) return j;
+  const jong = (c - 0xac00) % 28;
+  for (const [a, b] of JOSA) {
+    if (j !== a && j !== b) continue;
+    if (a === '으로') return jong && jong !== 8 ? a : b;
+    return jong ? a : b;
+  }
+  return j;
+}
+function restoreText(text) {
+  const josa = $('rsJosa').checked;
+  let count = 0;
+  const maps = nameMap().map(m => ({ ...m, pat: labelPattern(m.label) })).filter(m => m.pat).sort((a, b) => b.pat.core.length - a.pat.core.length);
+  // 이름 하나씩 차례로 바꾸되, 이미 바꾼 자리는 다시 건드리지 않도록 조각으로 나눠 둔다
+  let segs = [{ t: text, done: false }];
+  for (const m of maps) {
+    // 이름표 뒤에 닫는 괄호·따옴표·굵게 표시가 끼어 있어도 조사를 맞춘다
+    const re = new RegExp(m.pat.src + '((?:\\*\\*|[)）\\]】”’"\'*_])*)(?:(으로|은|는|이|가|을|를|과|와|로|아|야)(?![가-힣]))?', 'g');
+    const next = [];
+    for (const s of segs) {
+      if (s.done) { next.push(s); continue; }
+      let last = 0, x;
+      re.lastIndex = 0;
+      while ((x = re.exec(s.t))) {
+        if (x.index > last) next.push({ t: s.t.slice(last, x.index), done: false });
+        next.push({ t: m.name + (x[1] || '') + (x[2] ? (josa ? fixJosa(m.name, x[2]) : x[2]) : ''), done: true });
+        last = x.index + x[0].length; count++;
+        if (!x[0].length) re.lastIndex++;
+      }
+      if (last < s.t.length) next.push({ t: s.t.slice(last), done: false });
+    }
+    segs = next;
+  }
+  return { text: segs.map(s => s.t).join(''), count };
+}
+function renderRestore() {
+  const maps = nameMap(), src = $('rsIn').value;
+  $('rsMap').textContent = maps.length ? '대응표: ' + maps.map(m => `${m.label} = ${m.name}`).join(', ') : '대응표가 비어 있습니다. 개인정보 탭에 이름을 적으면 여기에 나타납니다.';
+  if (!src.trim()) { $('rsOut').value = ''; $('rsCount').textContent = ''; $('btnRsCopy').disabled = true; return; }
+  const r = restoreText(src);
+  $('rsOut').value = r.text;
+  $('rsCount').textContent = `${r.count}곳을 실제 이름으로 바꿨습니다.`;
+  $('btnRsCopy').disabled = false;
+}
+
+/* ───────────── 내보내기 ───────────── */
+const mdName = f => f.name.replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]+/g, '_') + '.md';
+const allMd = () => state.files.filter(f => f.out).map(f => `# ${f.name.replace(/\.[^.]+$/, '')}\n\n${f.out.md}`).join('\n---\n\n');
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function makeZip(files) {       // 압축하지 않는 ZIP
+  const enc = new TextEncoder(), parts = [], central = []; let offset = 0, cdSize = 0;
+  const d = new Date(), time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1), date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+  for (const f of files) {
+    const name = enc.encode(f.name), data = enc.encode(f.text), crc = crc32(data);
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
+    lh.setUint16(10, time, true); lh.setUint16(12, date, true); lh.setUint32(14, crc, true);
+    lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true); lh.setUint16(26, name.length, true);
+    parts.push(lh.buffer, name, data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
+    ch.setUint16(12, time, true); ch.setUint16(14, date, true); ch.setUint32(16, crc, true);
+    ch.setUint32(20, data.length, true); ch.setUint32(24, data.length, true); ch.setUint16(28, name.length, true); ch.setUint32(42, offset, true);
+    central.push(ch.buffer, name);
+    offset += 30 + name.length + data.length; cdSize += 46 + name.length;
+  }
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, end.buffer], { type: 'application/zip' });
+}
+
+/* ───────────── 입력 연결 ───────────── */
+function setTab(name) {
+  state.tab = name;
+  for (const t of document.querySelectorAll('.tab')) t.setAttribute('aria-selected', t.dataset.tab === name);
+  for (const p of document.querySelectorAll('.pane')) p.classList.toggle('on', p.id === 'pane-' + name);
+}
+function setView(v) { state.view = v; render(); }
+// 제목을 누르면 처음 화면으로: 변환 탭 · 미리보기 · 맨 위 (넣은 문서, 적어 둔 이름, 붙여 넣은 글은 그대로 둠)
+function goHome() {
+  if (state.tab !== 'conv') setTab('conv');
+  if (state.view !== 'preview') setView('preview');
+  $('scroller').scrollTop = 0; $('pane-conv').scrollTop = 0;
+  scrollTo(0, 0); document.body.scrollTop = 0;
+}
+$('homeLink').addEventListener('click', e => { e.preventDefault(); goHome(); });
+for (const t of document.querySelectorAll('.tab')) t.onclick = () => setTab(t.dataset.tab);
+$('viewSeg').onclick = e => { const v = e.target.dataset.v; if (v) setView(v); };
+$('btnAdd').onclick = $('btnAdd2').onclick = () => $('file').click();
+$('file').onchange = e => { const f = [...e.target.files]; e.target.value = ''; addFiles(f); };
+$('optTable').onchange = refresh; $('optHead').onchange = reparse; $('optPic').onchange = reparse; $('optHF').onchange = reparse; $('optMemo').onchange = reparse;
+let piiTimer = 0;
+const piiChanged = () => { clearTimeout(piiTimer); piiTimer = setTimeout(refresh, 250); };
+for (const id of ['namesStudent', 'namesTeacher', 'namesSchool', 'sidFmt']) $(id).addEventListener('input', piiChanged);
+for (const id of ['optRrn', 'optPhone', 'optEmail', 'optSid', 'optAddr', 'optAutoSchool', 'optLoose', 'optGiven']) $(id).onchange = refresh;
+$('rsIn').addEventListener('input', renderRestore); $('rsJosa').onchange = renderRestore;
+$('btnRsCopy').onclick = () => copyText($('rsOut').value, '실제 이름으로 바꾼 글을 복사했습니다.');
+$('btnCopy').onclick = () => { const f = curFile(); if (f?.out) copyText(f.out.md, 'Markdown을 복사했습니다.'); };
+$('btnSave').onclick = () => { const f = curFile(); if (f?.out) download(new Blob([f.out.md], { type: 'text/markdown;charset=utf-8' }), mdName(f)); };
+$('btnCopyAll').onclick = () => copyText(allMd(), '모든 문서를 이어서 복사했습니다.');
+$('btnSaveAll').onclick = () => {
+  const used = new Set(), list = state.files.filter(f => f.out).map(f => { let n = mdName(f); for (let i = 2; used.has(n.toLowerCase()); i++) n = mdName(f).replace(/\.md$/, ` (${i}).md`); used.add(n.toLowerCase()); return { name: n, text: f.out.md }; });
+  download(makeZip(list), `한글문서_변환_${list.length}개.zip`);
+};
+
+// 끌어다 놓기
+let dragDepth = 0;
+const hasFiles = e => [...(e.dataTransfer?.types || [])].includes('Files');
+window.addEventListener('dragenter', e => { if (hasFiles(e)) { e.preventDefault(); dragDepth++; $('left').classList.add('drag'); } });
+window.addEventListener('dragover', e => { if (hasFiles(e)) e.preventDefault(); });
+window.addEventListener('dragleave', e => { if (hasFiles(e) && --dragDepth <= 0) { dragDepth = 0; $('left').classList.remove('drag'); } });
+window.addEventListener('drop', e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault(); dragDepth = 0; $('left').classList.remove('drag');
+  addFiles(e.dataTransfer.files);
+});
+// 작업 중에 실수로 닫는 것을 막는다(대응표는 어디에도 저장하지 않으므로 닫으면 사라진다)
+window.addEventListener('beforeunload', e => { if (state.files.length || entities().length) { e.preventDefault(); e.returnValue = ''; } });
+
+if (typeof DecompressionStream === 'undefined') notice('browser', '이 브라우저는 문서를 풀지 못합니다. 크롬이나 엣지 최신 버전에서 열어 주세요.');
+render();
+</script>
+</body>
+</html>

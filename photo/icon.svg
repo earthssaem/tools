@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="사진 도구">
+  <!-- 이 도구의 브라우저 탭 아이콘(index.html 안에 들어 있는 것)과 같은 그림. 도구 목록 페이지에서 쓴다. -->
+  <rect width="32" height="32" rx="7" fill="#c2410c"/>
+  <rect x="5" y="8" width="22" height="16" rx="2.5" fill="#fff"/>
+  <circle cx="11" cy="13.5" r="2.2" fill="#ffb000"/>
+  <path d="M7 22l6-6 4 4 3-3 5 5z" fill="#c2410c"/>
+  <g fill="#1b2530"><rect x="18" y="10" width="3" height="3"/><rect x="21" y="13" width="3" height="3" opacity=".55"/><rect x="21" y="10" width="3" height="3" opacity=".3"/><rect x="18" y="13" width="3" height="3" opacity=".8"/></g>
+</svg>

@@ -13,6 +13,8 @@ vercel.json     Vercel 배포 설정 (/pdf 와 /pdf/ 둘 다 열리게 함, /gif
 pdf/            PDF 업무 도구
 gif/            움짤 메이커
 video/          동영상 편집기
+photo/          사진 도구
+hwpx/           한글 문서 변환
 ```
 
 ## 도구 목록
@@ -22,6 +24,8 @@ video/          동영상 편집기
 | [`/pdf`](pdf/) | PDF 업무 도구 | PDF 합치기·페이지 삭제·순서·회전, 개인정보 가명 처리, Markdown 변환. 자세한 내용은 [`pdf/README.md`](pdf/README.md) |
 | [`/gif`](gif/) | 움짤 메이커 | 웹앱 화면을 녹화해 기능별 GIF로 자르고, 목표 용량에 맞춰 저장. 자세한 내용은 [`gif/README.md`](gif/README.md) |
 | [`/video`](video/) | 동영상 편집기 | 긴 영상 자르기·이어 붙이기, 자막, 배속, 화면 자르기, 용량 줄여 mp4로 저장. 자세한 내용은 [`video/README.md`](video/README.md) |
+| [`/photo`](photo/) | 사진 도구 | 얼굴·이름표 가리기(모자이크), 여러 장 용량 줄이기, 아이폰 사진(HEIC) 변환, 촬영 위치 지우기. 자세한 내용은 [`photo/README.md`](photo/README.md) |
+| [`/hwpx`](hwpx/) | 한글 문서 변환 | 한글 문서(hwpx)를 Markdown으로 변환, 개인정보 가명 처리와 되돌리기. 자세한 내용은 [`hwpx/README.md`](hwpx/README.md) |
 
 ## 배포와 실행
 
@@ -48,3 +52,7 @@ npx serve
 `gif/`는 ffmpeg.wasm core(GPL-2.0-or-later)를 포함하므로 GNU GPL 조건을 따릅니다([`gif/LICENSE`](gif/LICENSE)).
 
 `video/`는 Mediabunny(MPL-2.0)를 고치지 않고 포함합니다([`video/lib/mediabunny-1.66.3/LICENSE`](video/lib/mediabunny-1.66.3/LICENSE)).
+
+`photo/`는 libheif-js(LGPL-3.0)를 고치지 않고 포함합니다([`photo/lib/libheif-1.23.5/LICENSE`](photo/lib/libheif-1.23.5/LICENSE)).
+
+`hwpx/`는 외부 라이브러리를 쓰지 않습니다.
