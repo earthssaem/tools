@@ -57,14 +57,15 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
   border-bottom: 1px solid var(--line); flex-wrap: wrap;
 }
 .top h1 { font-size: 17px; margin: 0 6px 0 0; letter-spacing: -.01em; white-space: nowrap; }
-/* 도구 목록(연경쌤의 업무 도구함)으로 돌아가는 링크 */
+/* 왼쪽 위 길잡이: 업무 도구함 › 이 도구. '업무 도구함'을 누르면 도구 목록으로 돌아간다 */
 a.hub {
-  flex: none; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 11px 0 6px; white-space: nowrap;
-  border: 1px solid var(--line2); border-radius: 7px; color: var(--muted); text-decoration: none; font-size: 13px;
+  flex: none; display: inline-flex; align-items: center; gap: 7px; padding: 4px 7px 4px 4px; margin-left: -4px; white-space: nowrap;
+  border-radius: 8px; color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 600;
 }
-a.hub img { width: 22px; height: 22px; border-radius: 5px; display: block; }
-a.hub:hover { border-color: #9aa7b6; background: #f8fafc; color: var(--text); }
+a.hub img { width: 26px; height: 26px; border-radius: 6px; display: block; }
+a.hub:hover { background: #eef1f6; color: var(--text); }
 a.hub:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.crumb { flex: none; color: #a9b2bf; font-size: 17px; line-height: 1; margin: 0 -7px; user-select: none; }
 .field { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 13px; white-space: nowrap; }
 .field input, .field select { color: var(--text); font-size: 14px; }
 #appName { width: 170px; }
@@ -220,7 +221,7 @@ details.c-adv > .row { margin-bottom: 6px; }
 <body>
 
 <header class="top">
-  <a class="hub" href="../" title="연경쌤의 업무 도구함으로 돌아가기"><img src="../icon.svg" alt="">도구함</a>
+  <a class="hub" href="../" title="연경쌤의 업무 도구함으로 돌아가기"><img src="../icon.svg" alt="">업무 도구함</a><span class="crumb" aria-hidden="true">›</span>
   <h1>움짤 메이커</h1>
   <label class="field"><span>앱 이름</span><input id="appName" type="text" maxlength="40" placeholder="예: 파도레이스" autocomplete="off"></label>
   <div class="recwrap">

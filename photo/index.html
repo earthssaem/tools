@@ -48,13 +48,15 @@ select:focus-visible, button:focus-visible, a:focus-visible, .thumb:focus-visibl
   border-bottom: 1px solid var(--line); flex-wrap: wrap;
 }
 .top h1 { font-size: 17px; margin: 0 8px 0 0; letter-spacing: -.01em; white-space: nowrap; }
-/* 도구 목록(연경쌤의 업무 도구함)으로 돌아가는 링크 */
+/* 왼쪽 위 길잡이: 업무 도구함 › 이 도구. '업무 도구함'을 누르면 도구 목록으로 돌아간다 */
 a.hub {
-  flex: none; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 11px 0 6px; white-space: nowrap;
-  border: 1px solid var(--line2); border-radius: 7px; color: var(--muted); text-decoration: none; font-size: 13px;
+  flex: none; display: inline-flex; align-items: center; gap: 7px; padding: 4px 7px 4px 4px; margin-left: -4px; white-space: nowrap;
+  border-radius: 8px; color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 600;
 }
-a.hub img { width: 22px; height: 22px; border-radius: 5px; display: block; }
-a.hub:hover { border-color: #9aa7b6; background: #f8fafc; color: var(--text); }
+a.hub img { width: 26px; height: 26px; border-radius: 6px; display: block; }
+a.hub:hover { background: #eef1f6; color: var(--text); }
+a.hub:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.crumb { flex: none; color: #a9b2bf; font-size: 17px; line-height: 1; margin: 0 -3px; user-select: none; }
 /* 제목을 누르면 처음 화면(사진 목록)으로 */
 a.brand { color: inherit; text-decoration: none; border-radius: 8px; margin: -4px 0; padding: 4px 0; -webkit-tap-highlight-color: transparent; }
 @media (hover: hover) { a.brand:hover h1 { color: var(--accent); } }
@@ -170,7 +172,7 @@ main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 320px; min-
 <body>
 
 <header class="top">
-  <a class="hub" href="../" title="연경쌤의 업무 도구함으로 돌아가기"><img src="../icon.svg" alt="">도구함</a>
+  <a class="hub" href="../" title="연경쌤의 업무 도구함으로 돌아가기"><img src="../icon.svg" alt="">업무 도구함</a><span class="crumb" aria-hidden="true">›</span>
   <a class="brand" id="homeLink" href="#" title="처음 화면으로" aria-label="사진 도구 — 처음 화면으로"><h1>사진 도구</h1></a>
   <button id="btnAdd" class="btn" type="button">＋ 사진 추가</button>
   <input id="file" type="file" accept="image/*,.heic,.heif" multiple hidden>
