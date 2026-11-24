@@ -43,22 +43,8 @@
   .card .go::after { content: "→"; display: inline-block; margin-left: 5px; transition: transform .15s; }
   a.card:hover .go::after { transform: translateX(3px); }
 
-  /* 이럴 때 쓰세요 */
-  .when { margin-top: 44px; }
-  .when h2 { font-size: 20px; margin: 0 0 14px; letter-spacing: -.01em; }
-  .when ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 18px; }
-  .when a {
-    --c: var(--brand);
-    display: flex; align-items: center; gap: 12px; padding: 12px 16px; text-decoration: none; height: 100%;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; transition: border-color .15s, background .15s;
-  }
-  .when a:hover, .when a:focus-visible { border-color: var(--c); background: color-mix(in srgb, var(--c) 4%, #fff); outline: none; }
-  .when img { width: 30px; height: 30px; flex: none; border-radius: 8px; }
-  .when .q { flex: 1; font-size: 14.5px; min-width: 0; }
-  .when .t { flex: none; font-size: 12.5px; font-weight: 700; color: var(--c); white-space: nowrap; }
-
   /* 약속 */
-  .promise { margin-top: 44px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+  .promise { margin-top: 40px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
   .promise div { padding: 4px 2px; }
   .promise h3 { font-size: 15.5px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
   .promise h3 svg { width: 20px; height: 20px; flex: none; color: var(--brand); }
@@ -78,11 +64,9 @@
     .hero img { width: 56px; height: 56px; border-radius: 14px; }
     .hero h1 { font-size: 25px; }
     .hero p { font-size: 15px; }
-    .grid, .when ul { grid-template-columns: 1fr; }
-    .when a { align-items: flex-start; }
-    .when .t { display: none; }
+    .grid { grid-template-columns: 1fr; }
   }
-  @media (prefers-reduced-motion: reduce) { a.card, .card .go::after, .when a { transition: none; } a.card:hover { transform: none; } }
+  @media (prefers-reduced-motion: reduce) { a.card, .card .go::after { transition: none; } a.card:hover { transform: none; } }
 </style>
 </head>
 <body>
@@ -103,7 +87,7 @@
 </header>
 
 <main class="wrap">
-  <!-- 도구를 추가하면 여기에 카드 하나, 아래 '이럴 때 쓰세요'에 한두 줄을 넣는다. --c는 그 도구 아이콘의 바탕색 -->
+  <!-- 도구를 추가하면 여기에 카드 하나를 넣는다. --c는 그 도구 아이콘의 바탕색 -->
   <ul class="grid">
     <li><a class="card" href="pdf/" style="--c:#2456c9">
       <div class="head"><img src="pdf/icon.svg" alt=""><div class="name">PDF 업무 도구</div></div>
@@ -137,25 +121,11 @@
     </a></li>
     <li><a class="card" href="qr/" style="--c:#d6336c">
       <div class="head"><img src="qr/icon.svg" alt=""><div class="name">QR 코드 만들기</div></div>
-      <p class="desc">주소 여러 개를 이름이 붙은 QR로 한 장에 모아 인쇄합니다. 하트 모양으로 꾸밀 수 있고, 만료되지 않습니다.</p>
-      <ul class="tags"><li>한 장에 모아 인쇄</li><li>하트 꾸미기</li><li>읽기 확인</li></ul>
+      <p class="desc">주소 여러 개를 이름이 붙은 QR로 한 장에 모아 인쇄합니다. 하트 모양 QR로도 만들 수 있고, 만료되지 않습니다.</p>
+      <ul class="tags"><li>한 장에 모아 인쇄</li><li>하트 모양 QR</li><li>읽기 확인</li></ul>
       <span class="go">열기</span>
     </a></li>
   </ul>
-
-  <section class="when" aria-labelledby="whenTitle">
-    <h2 id="whenTitle">이럴 때 쓰세요</h2>
-    <ul>
-      <li><a href="pdf/" style="--c:#2456c9"><img src="pdf/icon.svg" alt=""><span class="q">생기부·상담 기록 PDF를 AI에 넣기 전에 이름을 가리고 싶을 때</span><span class="t">PDF 업무 도구</span></a></li>
-      <li><a href="pdf/" style="--c:#2456c9"><img src="pdf/icon.svg" alt=""><span class="q">PDF 여러 개를 하나로 합치거나 쪽 순서를 바꿀 때</span><span class="t">PDF 업무 도구</span></a></li>
-      <li><a href="hwpx/" style="--c:#6d3fc8"><img src="hwpx/icon.svg" alt=""><span class="q">한글로 된 공문·계획서를 AI에게 읽히고 싶을 때</span><span class="t">한글 문서 변환</span></a></li>
-      <li><a href="photo/" style="--c:#c2410c"><img src="photo/icon.svg" alt=""><span class="q">학생 얼굴이 나온 사진을 블로그나 가정통신문에 올릴 때</span><span class="t">사진 도구</span></a></li>
-      <li><a href="photo/" style="--c:#c2410c"><img src="photo/icon.svg" alt=""><span class="q">아이폰 사진이 안 열리거나 용량이 너무 클 때</span><span class="t">사진 도구</span></a></li>
-      <li><a href="video/" style="--c:#0f7b6c"><img src="video/icon.svg" alt=""><span class="q">수업·실험 영상에서 필요한 부분만 잘라 내고 싶을 때</span><span class="t">동영상 편집기</span></a></li>
-      <li><a href="gif/" style="--c:#1769e0"><img src="gif/icon.svg" alt=""><span class="q">웹앱 사용법을 움직이는 그림으로 보여 주고 싶을 때</span><span class="t">움짤 메이커</span></a></li>
-      <li><a href="qr/" style="--c:#d6336c"><img src="qr/icon.svg" alt=""><span class="q">활동지나 칠판에 링크를 QR 코드로 붙이고 싶을 때</span><span class="t">QR 코드 만들기</span></a></li>
-    </ul>
-  </section>
 
   <section class="promise" aria-label="이 도구함의 약속">
     <div>
@@ -173,6 +143,6 @@
   </section>
 </main>
 
-<footer><div class="wrap"><span class="part">© 2026 제작: 김연경(earthssaem@gmail.com)</span> | <span class="part">블로그: <a class="blog" href="https://blog.naver.com/earthssaem" target="_blank" rel="noopener">blog.naver.com/earthssaem</a></span><br><a class="hub" href="https://earthssaem-lab.vercel.app/" target="_blank" rel="noopener">연경쌤의 지구과학 실험실 둘러보기 →</a></div></footer>
+<footer><div class="wrap"><span class="part">© 2026 제작: 김연경(earthssaem@gmail.com)</span> | <span class="part">블로그: <a class="blog" href="https://blog.naver.com/earthssaem" target="_blank" rel="noopener">blog.naver.com/earthssaem</a></span> | <a class="hub" href="https://earthssaem-lab.vercel.app/" target="_blank" rel="noopener">연경쌤의 지구과학 실험실 둘러보기 →</a></div></footer>
 </body>
 </html>

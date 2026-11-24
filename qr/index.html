@@ -181,6 +181,12 @@ main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 380px; min-
           <span class="swatches" id="swatches"></span>
           <input type="color" id="colorPick" title="다른 색 고르기" value="#111111">
         </div>
+        <div class="row"><span>전체</span>
+          <span class="seg" id="shapeSeg">
+            <button type="button" data-v="square"><svg viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>네모</button>
+            <button type="button" data-v="heart"><svg viewBox="0 0 10 10"><path d="M5 9.5S.2 6.2.2 3.2C.2 1.4 1.5.4 2.9.4 3.9.4 4.6 1 5 1.9 5.4 1 6.1.4 7.1.4 8.5.4 9.8 1.4 9.8 3.2 9.8 6.2 5 9.5 5 9.5z" fill="currentColor"/></svg>하트 모양 QR</button>
+          </span>
+        </div>
         <div class="row"><span>가운데</span>
           <select id="center">
             <option value="none">없음</option>
@@ -197,7 +203,6 @@ main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 380px; min-
           <span class="seg" id="frameSeg">
             <button type="button" data-v="none">없음</button>
             <button type="button" data-v="card">카드</button>
-            <button type="button" data-v="heart">하트</button>
           </span>
         </div>
       </section>
@@ -233,6 +238,9 @@ import qrcode from './lib/qrcode-generator-2.0.4/qrcode.mjs';
 /* ───────────── 조정값 ───────────── */
 const CFG = {
   QUIET: 4,                 // QR 둘레에 비워 두는 칸 수(표준은 4)
+  HEART_GAP: 1,             // 하트 모양 QR에서 진짜 QR 둘레에 비워 두는 칸 수(스캐너가 QR의 경계를 찾는 데 필요)
+  MIN_MODULE_MM: 0.45,      // 인쇄했을 때 QR 한 칸이 이보다 작으면 경고한다
+  HEART_FILL: 0.5,          // 하트를 채우는 장식 점의 비율
   CENTER_RATIO: 0.26,       // 가운데 그림이 차지하는 폭(전체 칸 수 대비). 오류 복원 수준 H로 감당할 수 있는 범위
   CHECKS: [[420, 0], [420, 1.4], [640, 2.2]],     // 읽기 확인: [그림 크기, 흐림 정도]를 차례로 시도
   PNG_PX: 1200,             // 저장하는 그림의 가로 크기
@@ -266,7 +274,7 @@ function el(tag, props = {}, ...kids) {
 }
 
 /* ───────────── 상태 ───────────── */
-const S = { dot: 'square', color: '#111111', center: 'none', centerText: '', logo: null, frame: 'none', cols: 3, title: '', showName: true, showUrl: false, cut: false };
+const S = { shape: 'square', dot: 'square', color: '#111111', center: 'none', centerText: '', logo: null, frame: 'none', cols: 3, title: '', showName: true, showUrl: false, cut: false };
 let items = [];     // { name, data, shown, err, svg, ok }
 
 /* 한 줄을 이름과 내용으로 나눈다 */
@@ -321,15 +329,54 @@ function eyePath(x, y, shape) {
   return { ring, core: shape === 'heart' ? heartPath(x + 1.7, y + 1.75, 3.6) : rrect(x + 2, y + 2, 3, 3, 0.9) };
 }
 const lum = hex => { const v = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(c => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
-const tint = (hex, k) => '#' + [1, 3, 5].map(i => Math.round(255 - (255 - parseInt(hex.slice(i, i + 2), 16)) * k).toString(16).padStart(2, '0')).join('');
 /* 가운데 그림의 색: 검정 계열 QR이면 분홍, 색을 고른 QR이면 그 색 */
 const accentOf = () => (lum(S.color) < 0.03 ? '#e0245e' : S.color);
 
 function makeMatrix(data) {
-  const qr = qrcode(0, S.center !== 'none' ? 'H' : S.dot === 'square' ? 'M' : 'Q');     // 가운데를 가리거나 점이 작아지는 모양은 오류 복원을 높인다
+  const qr = qrcode(0, S.center !== 'none' ? 'H' : S.dot === 'square' && S.shape === 'square' ? 'M' : 'Q');     // 가운데를 가리거나 꾸민 모양은 오류 복원을 높인다
   qr.addData(data, 'Byte');
   qr.make();
   return qr;
+}
+/* ── 하트 모양 QR ──
+   QR 코드 자체는 네모여야 읽힌다. 그래서 진짜 QR을 하트 한가운데에 두고, 하트의 나머지 칸을 같은 모양의 장식 점으로 채워
+   전체가 점으로 된 하트 하나로 보이게 한다. 장식 점은 읽히는 내용과 상관없다. */
+const hit = document.createElement('canvas').getContext('2d');
+/* 하트 안에 들어가는 가장 큰 정사각형(하트 상자의 한 변을 1로 볼 때의 크기와 위쪽 위치) */
+const HEART_FIT = (() => {
+  const K = 1000, path = new Path2D(heartPath(0, 0, K)), inside = (x, y) => hit.isPointInPath(path, x * K, y * K);
+  for (let s = 0.75; s > 0.3; s -= 0.005) for (let y0 = 0.08; y0 < 0.45; y0 += 0.005) {
+    let ok = true;
+    for (let i = 0; i <= 24 && ok; i++) { const t = i / 24, a = 0.5 - s / 2; ok = inside(a + s * t, y0) && inside(a + s * t, y0 + s) && inside(a, y0 + s * t) && inside(a + s, y0 + s * t); }
+    if (ok) return { s, y0 };
+  }
+  return { s: 0.5, y0: 0.2 };
+})();
+function seeded(str) {       // 같은 내용이면 늘 같은 무늬가 나오게 한다
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
+  return () => { h = (h + 0x6D2B79F5) | 0; let t = Math.imul(h ^ (h >>> 15), 1 | h); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+function heartGrid(n, seed) {
+  const gap = CFG.HEART_GAP, need = n + 2 * gap;
+  let G = Math.ceil(need / HEART_FIT.s);
+  if ((G - n) % 2) G++;                    // QR이 정확히 가운데에 오도록
+  for (; ; G += 2) {
+    const path = new Path2D(heartPath(0, 0, G)), inH = (x, y) => x >= 0 && y >= 0 && x < G && y < G && hit.isPointInPath(path, x + 0.5, y + 0.5);
+    const qx = (G - n) / 2, qy = Math.round(HEART_FIT.y0 * G + (HEART_FIT.s * G - need) / 2) + gap;
+    const x0 = qx - gap, y0 = qy - gap, x1 = qx + n - 1 + gap, y1 = qy + n - 1 + gap;
+    if (G < need * 3 && !(inH(x0, y0) && inH(x1, y0) && inH(x0, y1) && inH(x1, y1))) continue;      // QR과 둘레 빈칸이 하트 안에 다 들어갈 때까지 하트를 키운다
+    const rnd = seeded(seed), cells = [];
+    let top = G, bottom = 0;
+    for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) {
+      if (!inH(x, y)) continue;
+      top = Math.min(top, y); bottom = Math.max(bottom, y);
+      const edge = !inH(x - 1, y) || !inH(x + 1, y) || !inH(x, y - 1) || !inH(x, y + 1), r = rnd();
+      if (x >= x0 && x <= x1 && y >= y0 && y <= y1) continue;          // 진짜 QR이 놓일 자리
+      if (edge || r < CFG.HEART_FILL) cells.push([x, y]);              // 가장자리는 모두 채워서 하트 윤곽이 또렷하게
+    }
+    return { G, qx, qy, top, bottom, cells };
+  }
 }
 /* opt.label: 이름·주소를 그림 안에 넣는다(그림으로 저장할 때) */
 function buildSvg(it, opt = {}) {
@@ -353,28 +400,33 @@ function buildSvg(it, opt = {}) {
       inner += `<text x="${f2(m)}" y="${f2(m)}" font-size="${f2(fs)}" font-weight="800" fill="${a}" text-anchor="middle" dominant-baseline="central" font-family="'Pretendard','Malgun Gothic','Apple SD Gothic Neo',sans-serif">${xmlEsc(t)}</text>`;
     } else if (S.center === 'image' && S.logo) inner += `<image href="${S.logo}" x="${f2(m - s / 2)}" y="${f2(m - s / 2)}" width="${f2(s)}" height="${f2(s)}" preserveAspectRatio="xMidYMid meet"/>`;
   }
-  // 테두리와 바깥 크기
-  let W = B, H = B, ox = Q, oy = Q, back = `<rect width="${B}" height="${B}" fill="#fff"/>`;
+  // 전체 모양과 바깥 크기
+  let W = B, H = B, ox = Q, oy = Q, deco = '';
+  if (S.shape === 'heart') {
+    const g = heartGrid(n, it.data), pad = 2;
+    let fd = '';
+    for (const [x, y] of g.cells) fd += dotPath(x, y, S.dot);
+    W = g.G + pad * 2; H = g.bottom - g.top + 1 + pad * 2; ox = g.qx + pad; oy = g.qy - g.top + pad;
+    deco = `<path d="${fd}" fill="${c}" transform="translate(${pad} ${pad - g.top})"/>`;
+  }
+  let back = `<rect width="${f2(W)}" height="${f2(H)}" fill="#fff"/>`;
   if (S.frame === 'card') {
-    W = B + 2; H = B + 2; ox = Q + 1; oy = Q + 1;
+    W += 2; H += 2; ox += 1; oy += 1;
     back = `<rect x="0.35" y="0.35" width="${f2(W - 0.7)}" height="${f2(H - 0.7)}" rx="3.2" fill="#fff" stroke="${c}" stroke-width="0.7"/>`;
-  } else if (S.frame === 'heart') {
-    const hs = B * 1.4;        // 하트 위에 흰 네모(QR)를 얹는다. QR이 너무 작아지지 않게 네모가 하트 옆으로 조금 나온다
-    W = hs; H = hs * 0.95; ox = (W - B) / 2 + Q; oy = hs * 0.07 + Q;
-    back = `<path d="${heartPath(0, -hs * 0.03, hs)}" fill="${tint(accentOf(), 0.42)}"/><rect x="${f2(ox - Q)}" y="${f2(oy - Q)}" width="${B}" height="${B}" rx="2.4" fill="#fff"/>`;
+    if (deco) deco = `<g transform="translate(1 1)">${deco}</g>`;
   }
   let label = '';
   if (opt.label) {
     const lines = [];
     const fit = (t, base) => { const w = [...t].reduce((x, ch) => x + (ch.charCodeAt(0) > 0x2E80 ? 1 : 0.58), 0); return Math.min(base, (W * 0.94) / Math.max(1, w)); };
-    if (S.showName && it.name) lines.push({ t: it.name, fs: fit(it.name, B * 0.085), wt: 700, fill: '#111' });
-    if (S.showUrl) lines.push({ t: it.data, fs: fit(it.data, B * 0.05), wt: 400, fill: '#5a6573' });
+    if (S.showName && it.name) lines.push({ t: it.name, fs: fit(it.name, W * 0.08), wt: 700, fill: '#111' });
+    if (S.showUrl) lines.push({ t: it.data, fs: fit(it.data, W * 0.047), wt: 400, fill: '#5a6573' });
     let y = H + 0.6;
     for (const l of lines) { y += l.fs; label += `<text x="${f2(W / 2)}" y="${f2(y)}" font-size="${f2(l.fs)}" font-weight="${l.wt}" fill="${l.fill}" text-anchor="middle" font-family="'Pretendard','Malgun Gothic','Apple SD Gothic Neo',sans-serif">${xmlEsc(l.t)}</text>`; y += l.fs * 0.35; }
     if (lines.length) H = y + 0.8;
   }
-  const bg = opt.label || S.frame === 'heart' ? `<rect width="${f2(W)}" height="${f2(H)}" fill="#fff"/>` : '';
-  return { W, H, svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${f2(W)} ${f2(H)}">${bg}${back}<g transform="translate(${f2(ox)} ${f2(oy)})">${inner}</g>${label}</svg>` };
+  const bg = opt.label ? `<rect width="${f2(W)}" height="${f2(H)}" fill="#fff"/>` : '';
+  return { W, H, svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${f2(W)} ${f2(H)}">${bg}${back}${deco}<g transform="translate(${f2(ox)} ${f2(oy)})">${inner}</g>${label}</svg>` };
 }
 /* SVG를 그림(캔버스)으로 */
 function rasterize(svg, W, H, px, blur = 0) {
@@ -424,7 +476,7 @@ function render() {
     it.cell = cell;
     grid.append(cell);
   }
-  setPressed('dotSeg', S.dot); setPressed('frameSeg', S.frame);
+  setPressed('shapeSeg', S.shape); setPressed('dotSeg', S.dot); setPressed('frameSeg', S.frame);
   for (const b of $('swatches').children) b.setAttribute('aria-pressed', b.dataset.v === S.color);
   $('colorPick').value = S.color;
   $('centerText').hidden = S.center !== 'text'; $('btnLogo').hidden = S.center !== 'image';
@@ -457,8 +509,18 @@ async function check() {
   const errs = items.length - list.length, faint = lum(S.color) > 0.25;
   if (bad || errs) {
     st.className = 'warn';
-    st.textContent = (bad ? `${list.length}개 중 ${bad}개가 확인용 판독기에서 읽히지 않았습니다. ` + (faint ? '색이 너무 연합니다. 더 진한 색을 골라 보세요.' : '점 모양을 네모나 둥근으로 바꾸거나 가운데 그림을 빼 보세요.') : '') + (errs ? ` ${errs}개는 내용이 너무 길어 만들지 못했습니다.` : '');
-  } else { st.className = 'ok'; st.textContent = `${list.length}개 모두 읽기 확인을 통과했습니다.` + (S.dot === 'heart' || S.center !== 'none' ? ' 꾸민 QR은 인쇄한 뒤 휴대전화로도 한 번 찍어 보세요.' : ''); }
+    st.textContent = (bad ? `${list.length}개 중 ${bad}개가 확인용 판독기에서 읽히지 않았습니다. ` + (faint ? '색이 너무 연합니다. 더 진한 색을 골라 보세요.' : (S.shape === 'heart' ? '전체 모양을 네모로 바꾸거나 주소를 짧게 해 보세요.' : '점 모양을 네모나 둥근으로 바꾸거나 가운데 그림을 빼 보세요.')) : '') + (errs ? ` ${errs}개는 내용이 너무 길어 만들지 못했습니다.` : '');
+  } else {
+    // 인쇄했을 때 한 칸이 너무 작아지지 않는지 본다(A4, 여백 12mm 기준)
+    const cellMm = (186 - (S.cols - 1) * 5) / S.cols, small = list.filter(it => cellMm / it.W < CFG.MIN_MODULE_MM).length;
+    if (small) {
+      st.className = 'warn';
+      st.textContent = `읽기 확인은 통과했지만, 한 줄에 ${S.cols}개로 인쇄하면 ${small}개는 점이 너무 작아(${CFG.MIN_MODULE_MM}mm 미만) 휴대전화로 읽기 어려울 수 있습니다. 한 줄 개수를 줄이` + (S.shape === 'heart' ? '거나 전체 모양을 네모로 바꾸세요. 하트 모양은 진짜 QR이 가운데 절반 크기로 들어가서 더 크게 찍어야 합니다.' : '거나 주소를 짧게 해 보세요.');
+    } else {
+      st.className = 'ok';
+      st.textContent = `${list.length}개 모두 읽기 확인을 통과했습니다.` + (S.shape === 'heart' ? ' 하트 모양은 진짜 QR이 가운데에 작게 들어가므로 크게 인쇄하고, 나눠 주기 전에 휴대전화로 한 번 찍어 보세요.' : S.dot === 'heart' || S.center !== 'none' ? ' 꾸민 QR은 인쇄한 뒤 휴대전화로도 한 번 찍어 보세요.' : '');
+    }
+  }
 }
 
 /* ───────────── 저장 ───────────── */
@@ -517,6 +579,7 @@ for (const c of CFG.COLORS) { const b = el('button', { class: 'sw', type: 'butto
 let timer = 0;
 const later = () => { clearTimeout(timer); timer = setTimeout(render, 200); };
 $('src').addEventListener('input', later);
+$('shapeSeg').onclick = e => { const v = e.target.closest('button')?.dataset.v; if (v) { S.shape = v; render(); } };
 $('dotSeg').onclick = e => { const v = e.target.closest('button')?.dataset.v; if (v) { S.dot = v; render(); } };
 $('frameSeg').onclick = e => { const v = e.target.closest('button')?.dataset.v; if (v) { S.frame = v; render(); } };
 $('swatches').onclick = e => { const v = e.target.dataset.v; if (v) { S.color = v; render(); } };
