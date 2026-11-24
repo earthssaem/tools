@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- 이 페이지는 자기 자신(같은 주소)에서 받은 파일만 불러올 수 있다. 바깥으로 나가는 요청은 브라우저가 막는다. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' blob:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>QR 코드 만들기</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23d6336c'/%3E%3Cg fill='none' stroke='%23fff' stroke-width='2.2'%3E%3Crect x='6.1' y='6.1' width='7.8' height='7.8' rx='1.6'/%3E%3Crect x='18.1' y='6.1' width='7.8' height='7.8' rx='1.6'/%3E%3Crect x='6.1' y='18.1' width='7.8' height='7.8' rx='1.6'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f3f5f8; --panel: #ffffff; --line: #dde3ea; --line2: #c9d1db;
+  --text: #1b2530; --muted: #657282; --accent: #1769e0; --accent-soft: #e8f0fd;
+  --danger: #d43c3c; --warn-bg: #fff6dd; --warn-text: #7a5600; --ok: #1f7a45; --ok-bg: #e6f5ec;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.45 "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 13px; white-space: nowrap;
+  border: 1px solid var(--line2); border-radius: 7px; background: #fff; color: var(--text); cursor: pointer;
+}
+.btn:hover:not(:disabled) { border-color: #9aa7b6; background: #f8fafc; }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.btn.primary:hover:not(:disabled) { background: #0f58c4; border-color: #0f58c4; }
+.btn.xs { height: 26px; padding: 0 8px; font-size: 12px; border-radius: 6px; }
+select, input[type=text] { height: 32px; padding: 0 8px; border: 1px solid var(--line2); border-radius: 7px; background: #fff; min-width: 0; }
+textarea { border: 1px solid var(--line2); border-radius: 7px; padding: 8px 10px; background: #fff; width: 100%; resize: vertical; line-height: 1.6; font-size: 13px; }
+select:focus-visible, button:focus-visible, a:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* 상단 */
+.top {
+  display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--panel);
+  border-bottom: 1px solid var(--line); flex-wrap: wrap;
+}
+.top h1 { font-size: 17px; margin: 0 8px 0 0; letter-spacing: -.01em; white-space: nowrap; }
+/* 도구 목록(연경쌤의 업무 도구함)으로 돌아가는 링크 */
+a.hub {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 11px 0 6px; white-space: nowrap;
+  border: 1px solid var(--line2); border-radius: 7px; color: var(--muted); text-decoration: none; font-size: 13px;
+}
+a.hub img { width: 22px; height: 22px; border-radius: 5px; display: block; }
+a.hub:hover { border-color: #9aa7b6; background: #f8fafc; color: var(--text); }
+.spacer { flex: 1; }
+.local-note {
+  display: flex; align-items: center; gap: 6px; color: var(--ok); background: var(--ok-bg);
+  border-radius: 999px; padding: 4px 11px; font-size: 12.5px; font-weight: 600; white-space: nowrap;
+}
+
+/* 본문 */
+main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 380px; min-height: 0; }
+.left { min-width: 0; min-height: 0; overflow: auto; padding: 18px; }
+.sheet { max-width: 860px; margin: 0 auto; background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 28px 30px; box-shadow: 0 2px 10px rgba(20, 30, 45, .06); }
+.sheet-title { font-size: 20px; margin: 0 0 18px; text-align: center; overflow-wrap: anywhere; }
+.grid { display: grid; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); gap: 18px 14px; }
+.grid.cut { gap: 0; }
+.grid.cut .cell { border: 1px dashed #b3bcc7; margin: 0 -1px -1px 0; padding: 12px 8px; }
+.cell { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; min-width: 0; break-inside: avoid; }
+.cell .qr { width: 100%; }
+.cell .qr svg { display: block; width: 100%; height: auto; }
+.cell .nm { font-weight: 700; margin-top: 4px; overflow-wrap: anywhere; line-height: 1.3; font-size: calc(22px - var(--cols, 3) * 2px); }
+.cell .url { color: #5a6573; margin-top: 2px; overflow-wrap: anywhere; line-height: 1.3; font-size: calc(14px - var(--cols, 3) * 1px); }
+.cell .acts { position: absolute; top: 4px; right: 4px; display: none; gap: 4px; }
+.cell:hover .acts, .cell:focus-within .acts { display: flex; }
+.cell .badge { position: absolute; top: 4px; left: 4px; font-size: 11px; line-height: 18px; padding: 0 7px; border-radius: 9px; background: var(--warn-bg); color: var(--warn-text); white-space: nowrap; }
+.cell .err { color: var(--danger); font-size: 12.5px; padding: 20px 6px; }
+.empty { max-width: 520px; margin: 9vh auto 0; text-align: center; color: var(--muted); }
+.empty h2 { color: var(--text); font-size: 19px; margin: 0 0 6px; }
+.empty p { margin: 0 0 14px; text-wrap: balance; }
+
+/* 옆 패널 */
+.side { background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+#panels { flex: 1; overflow-y: auto; padding: 4px 14px 12px; }
+.sec { border-bottom: 1px solid var(--line); padding: 12px 0 14px; display: flex; flex-direction: column; gap: 9px; }
+.sec:last-child { border-bottom: 0; }
+.sec h2 { font-size: 14px; margin: 0; }
+.row { display: flex; align-items: center; gap: 8px; font-size: 13px; flex-wrap: wrap; }
+.row > span:first-child { width: 58px; color: var(--muted); flex: none; }
+.row select, .row input[type=text] { flex: 1; font-size: 13px; }
+.hint { color: var(--muted); font-size: 12.5px; line-height: 1.6; margin: 0; }
+.chk { display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: 13px; }
+.seg { display: inline-flex; border: 1px solid var(--line2); border-radius: 7px; overflow: hidden; }
+.seg button { border: 0; background: #fff; height: 30px; padding: 0 10px; font-size: 12.5px; cursor: pointer; border-left: 1px solid var(--line2); display: inline-flex; align-items: center; gap: 5px; }
+.seg button:first-child { border-left: 0; }
+.seg button[aria-pressed=true] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.seg svg { width: 14px; height: 14px; display: block; }
+.swatches { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.sw { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line2); cursor: pointer; padding: 0; }
+.sw[aria-pressed=true] { box-shadow: 0 0 0 2px var(--accent); }
+#colorPick { width: 34px; height: 30px; padding: 0 2px; border: 1px solid var(--line2); border-radius: 7px; background: #fff; cursor: pointer; }
+#status { font-size: 13px; line-height: 1.6; }
+#status.warn { color: var(--warn-text); background: var(--warn-bg); border-radius: 8px; padding: 8px 11px; }
+#status.ok { color: var(--ok); }
+.sidefoot { border-top: 1px solid var(--line); padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 8px; }
+#btnPrint { height: 40px; justify-content: center; font-size: 15px; }
+.sidefoot .btn { justify-content: center; }
+.srclink { align-self: flex-end; font-size: 12px; color: var(--muted); }
+.srclink:hover { color: var(--text); }
+
+#toasts { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 50; align-items: center; pointer-events: none; }
+.toast { background: #1b2530; color: #fff; padding: 9px 14px; border-radius: 8px; font-size: 13px; box-shadow: 0 6px 20px rgba(0, 0, 0, .25); max-width: 80vw; }
+[hidden] { display: none !important; }
+@media (max-width: 820px) {      /* 좁은 화면: 설정을 위에, QR을 아래에 두고 페이지 전체를 스크롤한다 */
+  html, body { height: auto; }
+  body { display: block; overflow: visible; }
+  main { display: flex; flex-direction: column; }
+  .left { overflow: visible; padding: 12px; }
+  .sheet { padding: 16px 12px; }
+  .side { border-left: 0; border-bottom: 1px solid var(--line); order: -1; display: block; }
+  #panels { overflow: visible; }
+  .local-note { display: none; }
+}
+
+/* 인쇄: 종이에는 QR 묶음만 찍는다 */
+@page { size: A4; margin: 12mm; }
+@media print {
+  html, body { height: auto; }
+  body { display: block; overflow: visible; background: #fff; }
+  .top, .side, #toasts, .no-print { display: none !important; }
+  main { display: block; }
+  .left { overflow: visible; padding: 0; }
+  .sheet { max-width: none; border: 0; border-radius: 0; box-shadow: none; padding: 0; margin: 0; }
+  .grid { gap: 7mm 5mm; }
+  .grid.cut { gap: 0; }
+  .cell .nm { font-size: calc(19pt - var(--cols, 3) * 2pt); }
+  .cell .url { font-size: calc(11pt - var(--cols, 3) * 1pt); }
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <a class="hub" href="../" title="연경쌤의 업무 도구함으로 돌아가기"><img src="../icon.svg" alt="">도구함</a>
+  <h1>QR 코드 만들기</h1>
+  <span class="spacer"></span>
+  <div class="local-note" title="QR 코드는 이 브라우저 안에서 만듭니다. 적은 주소를 어디에도 보내지 않습니다.">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.2 7V5a2.8 2.8 0 0 1 5.6 0v2"/></svg>
+    주소는 이 컴퓨터 밖으로 나가지 않습니다
+  </div>
+</header>
+
+<main>
+  <section class="left" id="left">
+    <div class="empty no-print" id="empty">
+      <h2>오른쪽에 주소를 적으면 QR 코드가 여기에 나옵니다</h2>
+      <p>여러 줄을 적으면 이름이 붙은 QR을 한 장에 모아 줍니다. 중간 서비스를 거치지 않는 QR이라 광고가 붙거나 나중에 만료되지 않습니다.</p>
+      <button class="btn" type="button" id="btnSample">예시 넣어 보기</button>
+    </div>
+    <div class="sheet" id="sheet" hidden>
+      <h2 class="sheet-title" id="sheetTitle" hidden></h2>
+      <div class="grid" id="grid"></div>
+    </div>
+  </section>
+
+  <aside class="side">
+    <div id="panels">
+      <section class="sec">
+        <h2>내용</h2>
+        <textarea id="src" rows="7" spellcheck="false" autocomplete="off" placeholder="한 줄에 하나씩 적습니다.&#10;&#10;판 구조론 탐구실, https://example.com/plate&#10;설문 참여, forms.gle/abcd1234&#10;https://example.com/주소만-적어도-됩니다"></textarea>
+        <p class="hint">이름과 주소를 쉼표로 나눠 적습니다. 엑셀에서 두 칸(이름, 주소)을 복사해 붙여도 됩니다. 주소가 아닌 글도 QR로 만들 수 있습니다.</p>
+      </section>
+      <section class="sec">
+        <h2>모양</h2>
+        <div class="row"><span>점</span>
+          <span class="seg" id="dotSeg">
+            <button type="button" data-v="square"><svg viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" fill="currentColor"/></svg>네모</button>
+            <button type="button" data-v="round"><svg viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="2.6" fill="currentColor"/></svg>둥근</button>
+            <button type="button" data-v="dot"><svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="currentColor"/></svg>동글</button>
+            <button type="button" data-v="heart"><svg viewBox="0 0 10 10"><path d="M5 9.5S.2 6.2.2 3.2C.2 1.4 1.5.4 2.9.4 3.9.4 4.6 1 5 1.9 5.4 1 6.1.4 7.1.4 8.5.4 9.8 1.4 9.8 3.2 9.8 6.2 5 9.5 5 9.5z" fill="currentColor"/></svg>하트</button>
+          </span>
+        </div>
+        <div class="row"><span>색</span>
+          <span class="swatches" id="swatches"></span>
+          <input type="color" id="colorPick" title="다른 색 고르기" value="#111111">
+        </div>
+        <div class="row"><span>가운데</span>
+          <select id="center">
+            <option value="none">없음</option>
+            <option value="heart">하트</option>
+            <option value="star">별</option>
+            <option value="text">글자</option>
+            <option value="image">그림 파일</option>
+          </select>
+          <input type="text" id="centerText" maxlength="4" placeholder="예: 3반" hidden style="max-width:90px">
+          <button class="btn xs" type="button" id="btnLogo" hidden>그림 고르기</button>
+          <input type="file" id="logoFile" accept="image/*" hidden>
+        </div>
+        <div class="row"><span>테두리</span>
+          <span class="seg" id="frameSeg">
+            <button type="button" data-v="none">없음</button>
+            <button type="button" data-v="card">카드</button>
+            <button type="button" data-v="heart">하트</button>
+          </span>
+        </div>
+      </section>
+      <section class="sec">
+        <h2>한 장에 모으기</h2>
+        <div class="row"><span>한 줄에</span>
+          <select id="cols"><option value="1">1개</option><option value="2">2개</option><option value="3">3개</option><option value="4">4개</option><option value="5">5개</option><option value="6">6개</option></select>
+        </div>
+        <div class="row"><span>제목</span><input type="text" id="title" maxlength="60" placeholder="예: 3학년 2반 탐구 활동" autocomplete="off"></div>
+        <label class="chk"><input type="checkbox" id="showName" checked>이름 표시</label>
+        <label class="chk"><input type="checkbox" id="showUrl">주소도 작게 표시</label>
+        <label class="chk"><input type="checkbox" id="cut">자르는 선 표시</label>
+      </section>
+      <section class="sec">
+        <h2>읽기 확인</h2>
+        <div id="status" class="hint">QR을 만들면 실제로 읽히는지 여기서 확인해 줍니다.</div>
+      </section>
+    </div>
+    <div class="sidefoot">
+      <button id="btnPrint" class="btn primary" type="button" disabled>인쇄 / PDF로 저장</button>
+      <button id="btnZip" class="btn" type="button" disabled>그림(PNG)으로 모두 저장</button>
+      <a class="srclink" href="https://github.com/earthssaem/tools/tree/main/qr" target="_blank" rel="noopener noreferrer">소스·라이선스</a>
+    </div>
+  </aside>
+</main>
+
+<div id="toasts" aria-live="polite"></div>
+
+<script src="lib/jsqr-1.4.0/jsQR.js"></script>
+<script type="module">
+import qrcode from './lib/qrcode-generator-2.0.4/qrcode.mjs';
+
+/* ───────────── 조정값 ───────────── */
+const CFG = {
+  QUIET: 4,                 // QR 둘레에 비워 두는 칸 수(표준은 4)
+  CENTER_RATIO: 0.26,       // 가운데 그림이 차지하는 폭(전체 칸 수 대비). 오류 복원 수준 H로 감당할 수 있는 범위
+  CHECKS: [[420, 0], [420, 1.4], [640, 2.2]],     // 읽기 확인: [그림 크기, 흐림 정도]를 차례로 시도
+  PNG_PX: 1200,             // 저장하는 그림의 가로 크기
+  MAX_ITEMS: 120,
+  COLORS: ['#111111', '#1a3a8f', '#136c43', '#5b2aa0', '#c8102e', '#e0457b'],
+};
+// 한글도 깨지지 않게 UTF-8로 담는다
+qrcode.stringToBytes = s => Array.from(new TextEncoder().encode(s));
+
+/* ───────────── 도우미 ───────────── */
+const $ = id => document.getElementById(id);
+const f2 = v => String(Math.round(v * 100) / 100);
+const xmlEsc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+function toast(msg, ms = 3800) {
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = msg;
+  $('toasts').append(t);
+  setTimeout(() => t.remove(), ms);
+}
+function download(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+function el(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) { if (k === 'class') e.className = v; else if (k === 'text') e.textContent = v; else e[k] = v; }
+  e.append(...kids);
+  return e;
+}
+
+/* ───────────── 상태 ───────────── */
+const S = { dot: 'square', color: '#111111', center: 'none', centerText: '', logo: null, frame: 'none', cols: 3, title: '', showName: true, showUrl: false, cut: false };
+let items = [];     // { name, data, shown, err, svg, ok }
+
+/* 한 줄을 이름과 내용으로 나눈다 */
+const looksUrl = s => /^(https?:\/\/|www\.)\S+$/i.test(s) || /^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(s);
+const hasScheme = s => /^[a-z][a-z0-9+.-]*:\S/i.test(s);       // https:, mailto:, tel:, WIFI: …
+const fixUrl = s => (hasScheme(s) ? s : looksUrl(s) ? 'https://' + s : s);
+function parseLines(text) {
+  const out = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    let name = '', data = line;
+    if (line.includes('\t')) {                       // 엑셀에서 붙여 넣은 줄
+      const cols = line.split('\t').map(s => s.trim()).filter(Boolean);
+      if (cols.length >= 2) { [name, data] = looksUrl(cols[0]) && !looksUrl(cols[1]) ? [cols[1], cols[0]] : [cols[0], cols.slice(1).join(' ')]; }
+      else data = cols[0] || '';
+    } else {
+      const m = /^(.*?)\s*[,，|]\s*(\S+)$/.exec(line) || /^(.+?)\s+((?:https?:\/\/|www\.)\S+)$/i.exec(line);
+      if (m && (looksUrl(m[2]) || hasScheme(m[2]))) { name = m[1].trim(); data = m[2]; }
+    }
+    if (!data) continue;
+    out.push({ name, data: fixUrl(data) });
+    if (out.length >= CFG.MAX_ITEMS) break;
+  }
+  return out;
+}
+
+/* ───────────── QR 그리기 ─────────────
+   좌표 단위는 QR의 한 칸이다. 화면·인쇄·그림 저장·읽기 확인이 모두 여기서 만든 SVG를 쓴다. */
+const HEART = [[.5, .95], [.5, .95, .02, .62, .02, .32], [.02, .14, .15, .04, .29, .04], [.39, .04, .46, .10, .5, .19], [.54, .10, .61, .04, .71, .04], [.85, .04, .98, .14, .98, .32], [.98, .62, .5, .95, .5, .95]];
+function heartPath(x, y, s) {      // (x, y)에서 시작하는 한 변 s짜리 상자에 꽉 차는 하트
+  return HEART.map((p, i) => (i ? 'C' : 'M') + p.map((v, k) => f2((k % 2 ? y : x) + v * s)).join(' ')).join('') + 'Z';
+}
+function starPath(cx, cy, r) {
+  let d = '';
+  for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r; d += (i ? 'L' : 'M') + f2(cx + Math.cos(a) * rr) + ' ' + f2(cy + Math.sin(a) * rr); }
+  return d + 'Z';
+}
+const rrect = (x, y, w, h, r) => `M${f2(x + r)} ${f2(y)}h${f2(w - 2 * r)}a${f2(r)} ${f2(r)} 0 0 1 ${f2(r)} ${f2(r)}v${f2(h - 2 * r)}a${f2(r)} ${f2(r)} 0 0 1 ${f2(-r)} ${f2(r)}h${f2(2 * r - w)}a${f2(r)} ${f2(r)} 0 0 1 ${f2(-r)} ${f2(-r)}v${f2(2 * r - h)}a${f2(r)} ${f2(r)} 0 0 1 ${f2(r)} ${f2(-r)}z`;
+const circ = (cx, cy, r) => `M${f2(cx - r)} ${f2(cy)}a${f2(r)} ${f2(r)} 0 1 0 ${f2(2 * r)} 0a${f2(r)} ${f2(r)} 0 1 0 ${f2(-2 * r)} 0z`;
+function dotPath(x, y, shape) {
+  if (shape === 'round') return rrect(x + 0.04, y + 0.04, 0.92, 0.92, 0.3);
+  if (shape === 'dot') return circ(x + 0.5, y + 0.5, 0.5);
+  if (shape === 'heart') return heartPath(x - 0.07, y - 0.04, 1.14);
+  return `M${x} ${y}h1v1h-1z`;
+}
+/* 모서리의 큰 네모 세 개(위치 찾기 무늬). 스캐너가 QR을 찾는 기준이라 점 모양이 하트여도 또렷하게 그린다. */
+function eyePath(x, y, shape) {
+  if (shape === 'square') return { ring: `M${x} ${y}h7v7h-7zM${x + 1} ${y + 1}v5h5v-5z`, core: `M${x + 2} ${y + 2}h3v3h-3z` };
+  if (shape === 'dot') return { ring: circ(x + 3.5, y + 3.5, 3.5) + circ(x + 3.5, y + 3.5, 2.5), core: circ(x + 3.5, y + 3.5, 1.5) };
+  const ring = rrect(x, y, 7, 7, 2) + rrect(x + 1, y + 1, 5, 5, 1.2);
+  return { ring, core: shape === 'heart' ? heartPath(x + 1.7, y + 1.75, 3.6) : rrect(x + 2, y + 2, 3, 3, 0.9) };
+}
+const lum = hex => { const v = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(c => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+const tint = (hex, k) => '#' + [1, 3, 5].map(i => Math.round(255 - (255 - parseInt(hex.slice(i, i + 2), 16)) * k).toString(16).padStart(2, '0')).join('');
+/* 가운데 그림의 색: 검정 계열 QR이면 분홍, 색을 고른 QR이면 그 색 */
+const accentOf = () => (lum(S.color) < 0.03 ? '#e0245e' : S.color);
+
+function makeMatrix(data) {
+  const qr = qrcode(0, S.center !== 'none' ? 'H' : S.dot === 'square' ? 'M' : 'Q');     // 가운데를 가리거나 점이 작아지는 모양은 오류 복원을 높인다
+  qr.addData(data, 'Byte');
+  qr.make();
+  return qr;
+}
+/* opt.label: 이름·주소를 그림 안에 넣는다(그림으로 저장할 때) */
+function buildSvg(it, opt = {}) {
+  const qr = makeMatrix(it.data), n = qr.getModuleCount(), Q = CFG.QUIET, B = n + 2 * Q, c = S.color;
+  // 가운데 비울 칸
+  let k = 0;
+  if (S.center !== 'none') { k = Math.max(5, Math.round(n * CFG.CENTER_RATIO)); if (k % 2 === 0) k++; }
+  const z0 = (n - k) / 2, inCenter = (r, col) => k && r >= z0 && r < z0 + k && col >= z0 && col < z0 + k;
+  const inEye = (r, col) => (r < 7 && col < 7) || (r < 7 && col >= n - 7) || (r >= n - 7 && col < 7);
+  let d = '';
+  for (let r = 0; r < n; r++) for (let col = 0; col < n; col++) if (qr.isDark(r, col) && !inEye(r, col) && !inCenter(r, col)) d += dotPath(col, r, S.dot);
+  let ring = '', core = '';
+  for (const [ex, ey] of [[0, 0], [n - 7, 0], [0, n - 7]]) { const e = eyePath(ex, ey, S.dot); ring += e.ring; core += e.core; }
+  let inner = `<path d="${d}" fill="${c}"/><path d="${ring}" fill="${c}" fill-rule="evenodd"/><path d="${core}" fill="${c}"/>`;
+  if (k) {
+    const a = accentOf(), m = n / 2, s = k - 1.2;
+    if (S.center === 'heart') inner += `<path d="${heartPath(m - s / 2, m - s / 2 + 0.1, s)}" fill="${a}"/>`;
+    else if (S.center === 'star') inner += `<path d="${starPath(m, m + 0.2, s / 2 + 0.2)}" fill="${a}"/>`;
+    else if (S.center === 'text' && S.centerText) {
+      const t = S.centerText, w = [...t].reduce((x, ch) => x + (ch.charCodeAt(0) > 0x2E80 ? 1 : 0.6), 0), fs = Math.min(s * 0.9, (s + 0.6) / Math.max(1, w));
+      inner += `<text x="${f2(m)}" y="${f2(m)}" font-size="${f2(fs)}" font-weight="800" fill="${a}" text-anchor="middle" dominant-baseline="central" font-family="'Pretendard','Malgun Gothic','Apple SD Gothic Neo',sans-serif">${xmlEsc(t)}</text>`;
+    } else if (S.center === 'image' && S.logo) inner += `<image href="${S.logo}" x="${f2(m - s / 2)}" y="${f2(m - s / 2)}" width="${f2(s)}" height="${f2(s)}" preserveAspectRatio="xMidYMid meet"/>`;
+  }
+  // 테두리와 바깥 크기
+  let W = B, H = B, ox = Q, oy = Q, back = `<rect width="${B}" height="${B}" fill="#fff"/>`;
+  if (S.frame === 'card') {
+    W = B + 2; H = B + 2; ox = Q + 1; oy = Q + 1;
+    back = `<rect x="0.35" y="0.35" width="${f2(W - 0.7)}" height="${f2(H - 0.7)}" rx="3.2" fill="#fff" stroke="${c}" stroke-width="0.7"/>`;
+  } else if (S.frame === 'heart') {
+    const hs = B * 1.4;        // 하트 위에 흰 네모(QR)를 얹는다. QR이 너무 작아지지 않게 네모가 하트 옆으로 조금 나온다
+    W = hs; H = hs * 0.95; ox = (W - B) / 2 + Q; oy = hs * 0.07 + Q;
+    back = `<path d="${heartPath(0, -hs * 0.03, hs)}" fill="${tint(accentOf(), 0.42)}"/><rect x="${f2(ox - Q)}" y="${f2(oy - Q)}" width="${B}" height="${B}" rx="2.4" fill="#fff"/>`;
+  }
+  let label = '';
+  if (opt.label) {
+    const lines = [];
+    const fit = (t, base) => { const w = [...t].reduce((x, ch) => x + (ch.charCodeAt(0) > 0x2E80 ? 1 : 0.58), 0); return Math.min(base, (W * 0.94) / Math.max(1, w)); };
+    if (S.showName && it.name) lines.push({ t: it.name, fs: fit(it.name, B * 0.085), wt: 700, fill: '#111' });
+    if (S.showUrl) lines.push({ t: it.data, fs: fit(it.data, B * 0.05), wt: 400, fill: '#5a6573' });
+    let y = H + 0.6;
+    for (const l of lines) { y += l.fs; label += `<text x="${f2(W / 2)}" y="${f2(y)}" font-size="${f2(l.fs)}" font-weight="${l.wt}" fill="${l.fill}" text-anchor="middle" font-family="'Pretendard','Malgun Gothic','Apple SD Gothic Neo',sans-serif">${xmlEsc(l.t)}</text>`; y += l.fs * 0.35; }
+    if (lines.length) H = y + 0.8;
+  }
+  const bg = opt.label || S.frame === 'heart' ? `<rect width="${f2(W)}" height="${f2(H)}" fill="#fff"/>` : '';
+  return { W, H, svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${f2(W)} ${f2(H)}">${bg}${back}<g transform="translate(${f2(ox)} ${f2(oy)})">${inner}</g>${label}</svg>` };
+}
+/* SVG를 그림(캔버스)으로 */
+function rasterize(svg, W, H, px, blur = 0) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })), img = new Image();
+    img.onload = () => {
+      const cv = document.createElement('canvas'); cv.width = px; cv.height = Math.round(px * H / W);
+      const ctx = cv.getContext('2d', { willReadFrequently: true });
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+      if (blur) ctx.filter = `blur(${blur}px)`;
+      ctx.drawImage(img, 0, 0, cv.width, cv.height);
+      URL.revokeObjectURL(url); res(cv);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('그림으로 바꾸지 못했습니다')); };
+    img.src = url;
+  });
+}
+
+/* ───────────── 화면 ───────────── */
+let gen = 0;
+function render() {
+  items = parseLines($('src').value);
+  const has = items.length > 0, grid = $('grid');
+  $('empty').hidden = has; $('sheet').hidden = !has;
+  $('btnPrint').disabled = $('btnZip').disabled = !has;
+  $('sheetTitle').hidden = !S.title; $('sheetTitle').textContent = S.title;
+  $('sheet').style.setProperty('--cols', S.cols);
+  grid.classList.toggle('cut', S.cut);
+  grid.textContent = '';
+  for (const it of items) {
+    const cell = el('div', { class: 'cell' });
+    try {
+      const { svg, W, H } = buildSvg(it);
+      it.svg = svg; it.W = W; it.H = H; it.err = '';
+      const node = new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement;
+      node.setAttribute('role', 'img'); node.setAttribute('aria-label', (it.name || it.data) + ' QR 코드');
+      cell.append(el('div', { class: 'qr' }, document.importNode(node, true)));
+      if (S.showName && it.name) cell.append(el('div', { class: 'nm', text: it.name }));
+      if (S.showUrl) cell.append(el('div', { class: 'url', text: it.data }));
+      const bSave = el('button', { class: 'btn xs', type: 'button', text: '저장' }), bCopy = el('button', { class: 'btn xs', type: 'button', text: '복사' });
+      bSave.onclick = () => savePng(it); bCopy.onclick = () => copyPng(it);
+      cell.append(el('div', { class: 'acts no-print' }, bSave, bCopy));
+    } catch (e) {
+      it.err = /overflow|too long|big/i.test(String(e?.message || e)) ? '내용이 너무 길어 QR로 만들 수 없습니다.' : 'QR로 만들 수 없는 내용입니다.';
+      cell.append(el('div', { class: 'err', text: `${it.name || it.data.slice(0, 20)}: ${it.err}` }));
+    }
+    it.cell = cell;
+    grid.append(cell);
+  }
+  setPressed('dotSeg', S.dot); setPressed('frameSeg', S.frame);
+  for (const b of $('swatches').children) b.setAttribute('aria-pressed', b.dataset.v === S.color);
+  $('colorPick').value = S.color;
+  $('centerText').hidden = S.center !== 'text'; $('btnLogo').hidden = S.center !== 'image';
+  $('btnZip').textContent = items.length > 1 ? `그림(PNG)으로 모두 저장 (${items.length}개, ZIP)` : '그림(PNG)으로 저장';
+  check();
+}
+function setPressed(id, v) { for (const b of $(id).children) b.setAttribute('aria-pressed', b.dataset.v === v); }
+
+/* 읽기 확인: 만든 QR을 그림으로 바꿔서 판독기(jsQR)로 다시 읽어 본다. 꾸민 모양이나 연한 색 때문에 안 읽히는 일을 미리 잡는다. */
+async function check() {
+  const my = ++gen, st = $('status'), list = items.filter(it => !it.err);
+  if (!items.length) { st.className = 'hint'; st.textContent = 'QR을 만들면 실제로 읽히는지 여기서 확인해 줍니다.'; return; }
+  st.className = 'hint'; st.textContent = '읽기 확인 중…';
+  let bad = 0;
+  for (const it of list) {
+    let ok = false;
+    try {
+      // 또렷한 그림으로 한 번, 카메라로 찍은 것처럼 살짝 흐리게 해서 두 번 더 읽어 본다. 한 번이라도 읽히면 통과
+      for (const [px, blur] of CFG.CHECKS) {
+        const cv = await rasterize(it.svg, it.W, it.H, px, blur);
+        if (my !== gen) return;
+        const im = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height);
+        if (window.jsQR(im.data, im.width, im.height, { inversionAttempts: 'dontInvert' })?.data === it.data) { ok = true; break; }
+      }
+    } catch { ok = false; }
+    if (my !== gen) return;
+    it.ok = ok;
+    if (!ok) { bad++; it.cell.append(el('div', { class: 'badge no-print', text: '안 읽힐 수 있음' })); }
+  }
+  const errs = items.length - list.length, faint = lum(S.color) > 0.25;
+  if (bad || errs) {
+    st.className = 'warn';
+    st.textContent = (bad ? `${list.length}개 중 ${bad}개가 확인용 판독기에서 읽히지 않았습니다. ` + (faint ? '색이 너무 연합니다. 더 진한 색을 골라 보세요.' : '점 모양을 네모나 둥근으로 바꾸거나 가운데 그림을 빼 보세요.') : '') + (errs ? ` ${errs}개는 내용이 너무 길어 만들지 못했습니다.` : '');
+  } else { st.className = 'ok'; st.textContent = `${list.length}개 모두 읽기 확인을 통과했습니다.` + (S.dot === 'heart' || S.center !== 'none' ? ' 꾸민 QR은 인쇄한 뒤 휴대전화로도 한 번 찍어 보세요.' : ''); }
+}
+
+/* ───────────── 저장 ───────────── */
+const safeName = it => (it.name || it.data.replace(/^https?:\/\//, '')).replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 60) || 'qr';
+async function pngOf(it) {
+  const { svg, W, H } = buildSvg(it, { label: true });
+  const cv = await rasterize(svg, W, H, CFG.PNG_PX);
+  return new Promise((res, rej) => cv.toBlob(b => (b ? res(b) : rej(new Error('png'))), 'image/png'));
+}
+async function savePng(it) { try { download(await pngOf(it), safeName(it) + '.png'); } catch { toast('그림으로 저장하지 못했습니다.'); } }
+async function copyPng(it) {
+  try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': await pngOf(it) })]); toast('QR 그림을 복사했습니다. 문서에 붙여 넣으세요.'); }
+  catch { toast('이 브라우저에서는 그림 복사를 쓸 수 없습니다. "저장"을 눌러 주세요.', 5000); }
+}
+async function saveAll() {
+  const list = items.filter(it => !it.err);
+  if (!list.length) return;
+  if (list.length === 1) return savePng(list[0]);
+  const used = new Set(), files = [];
+  for (const it of list) {
+    let name = safeName(it) + '.png';
+    for (let i = 2; used.has(name.toLowerCase()); i++) name = `${safeName(it)} (${i}).png`;
+    used.add(name.toLowerCase());
+    files.push({ name, blob: await pngOf(it) });
+  }
+  download(await makeZip(files), `QR_${list.length}개.zip`);
+}
+/* 압축하지 않는 ZIP. PNG는 이미 압축돼 있어 다시 압축해도 줄지 않는다 */
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+async function makeZip(files) {
+  const enc = new TextEncoder(), parts = [], central = []; let offset = 0, cdSize = 0;
+  const d = new Date(), time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1), date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+  for (const f of files) {
+    const name = enc.encode(f.name), data = new Uint8Array(await f.blob.arrayBuffer()), crc = crc32(data);
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);   // 0x0800: 파일명이 UTF-8
+    lh.setUint16(10, time, true); lh.setUint16(12, date, true); lh.setUint32(14, crc, true);
+    lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true); lh.setUint16(26, name.length, true);
+    parts.push(lh.buffer, name, data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
+    ch.setUint16(12, time, true); ch.setUint16(14, date, true); ch.setUint32(16, crc, true);
+    ch.setUint32(20, data.length, true); ch.setUint32(24, data.length, true); ch.setUint16(28, name.length, true); ch.setUint32(42, offset, true);
+    central.push(ch.buffer, name);
+    offset += 30 + name.length + data.length; cdSize += 46 + name.length;
+  }
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, end.buffer], { type: 'application/zip' });
+}
+
+/* ───────────── 입력 연결 ───────────── */
+for (const c of CFG.COLORS) { const b = el('button', { class: 'sw', type: 'button', title: c }); b.dataset.v = c; b.style.background = c; $('swatches').append(b); }
+let timer = 0;
+const later = () => { clearTimeout(timer); timer = setTimeout(render, 200); };
+$('src').addEventListener('input', later);
+$('dotSeg').onclick = e => { const v = e.target.closest('button')?.dataset.v; if (v) { S.dot = v; render(); } };
+$('frameSeg').onclick = e => { const v = e.target.closest('button')?.dataset.v; if (v) { S.frame = v; render(); } };
+$('swatches').onclick = e => { const v = e.target.dataset.v; if (v) { S.color = v; render(); } };
+$('colorPick').addEventListener('input', e => { S.color = e.target.value; later(); });
+$('center').onchange = e => { S.center = e.target.value; render(); if (S.center === 'image' && !S.logo) $('logoFile').click(); if (S.center === 'text') $('centerText').focus(); };
+$('centerText').addEventListener('input', e => { S.centerText = e.target.value.trim(); later(); });
+$('btnLogo').onclick = () => $('logoFile').click();
+$('logoFile').onchange = e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  const img = new Image(), url = URL.createObjectURL(f);
+  img.onload = () => {      // 작게 줄여서 QR 그림 안에 넣는다
+    const k = Math.min(1, 320 / Math.max(img.width, img.height)), cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.round(img.width * k)); cv.height = Math.max(1, Math.round(img.height * k));
+    cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+    S.logo = cv.toDataURL('image/png'); URL.revokeObjectURL(url); render();
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); toast('이 그림은 열 수 없습니다.'); };
+  img.src = url;
+};
+$('cols').value = String(S.cols);
+$('cols').onchange = e => { S.cols = Number(e.target.value); render(); };
+$('title').addEventListener('input', e => { S.title = e.target.value.trim(); $('sheetTitle').hidden = !S.title; $('sheetTitle').textContent = S.title; });
+$('showName').onchange = e => { S.showName = e.target.checked; render(); };
+$('showUrl').onchange = e => { S.showUrl = e.target.checked; render(); };
+$('cut').onchange = e => { S.cut = e.target.checked; render(); };
+$('btnPrint').onclick = () => window.print();
+$('btnZip').onclick = saveAll;
+$('btnSample').onclick = () => { $('src').value = '연경쌤의 지구과학 실험실, https://earthssaem-lab.vercel.app/\n업무 도구함, ' + new URL('../', location.href).href + '\n과학실 와이파이, WIFI:T:WPA;S:science-lab;P:12345678;;'; render(); };
+
+render();
+</script>
+</body>
+</html>
